@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aparat</title>
+<link rel="stylesheet" href="ui/style.css">
+</head>
+<body>
+<header>
+  <h1>aparat</h1>
+  <button id="start">start audio</button>
+  <select id="device" aria-label="output device"><option value="">system default</option></select>
+  <button id="devices" title="asks for microphone permission, needed to show device names">device names</button>
+  <span class="group">
+    <button id="midi">enable midi</button>
+    <select id="midiIn" aria-label="midi input" hidden></select>
+    <select id="midiOut" aria-label="midi output" hidden></select>
+  </span>
+  <span class="group">
+    <button id="new">new</button>
+    <button id="save">save</button>
+    <button id="load">load</button>
+    <input id="file" type="file" accept=".json,application/json" hidden>
+    <button id="record">record</button>
+  </span>
+  <span class="status">
+    <span id="channels">off</span>
+    <span id="cpu"></span>
+    <span id="clip" aria-label="clipping per output channel"></span>
+  </span>
+</header>
+<div id="error" role="alert"></div>
+<div id="workspace">
+  <nav id="library" aria-label="modules"></nav>
+  <div id="stage">
+    <div id="rack"><div id="content"></div></div>
+    <canvas id="cables"></canvas>
+  </div>
+</div>
+<footer>drag jacks to patch · pull a cable off an input to move or remove it · ctrl-drag an input for another cable · double-click a knob to reset · right-click a knob for midi learn · delete removes the selected module</footer>
+<script type="module" src="ui/main.js"></script>
+</body>
+</html>

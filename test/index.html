@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aparat hardware test</title>
+<style>
+  :root {
+    --background: #0c0c0c; --panel: #181818; --edge: #272727;
+    --low: #595959; --med: #808080; --high: #9c9c9c; --accent: #ed2c3e;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--background); color: var(--med);
+    font: 14px/1.5 Inter, sans-serif; padding: 2rem 1rem; text-transform: lowercase;
+  }
+  main { max-width: 56rem; margin: auto; display: grid; gap: 1rem; }
+  h1 { font-size: 1.5rem; font-weight: 600; color: var(--high); }
+  h2 { font-size: 1rem; font-weight: 500; color: var(--high); margin-bottom: .75rem; }
+  section { background: var(--panel); border: 1px solid var(--edge); padding: 1rem; }
+  .row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: .75rem; }
+  button, select {
+    font: inherit; text-transform: inherit; padding: .35rem .75rem; cursor: pointer;
+    background: var(--edge); color: var(--high); border: 1px solid var(--low);
+  }
+  button:hover { background: var(--med); color: var(--background); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.on { background: var(--high); color: var(--background); }
+  input[type=range] { accent-color: var(--med); }
+  pre, table, .mono { font-family: "Roboto Mono", monospace; font-size: 12px; text-transform: none; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--high); max-height: 16rem; overflow-y: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: right; padding: .15rem .5rem; border-bottom: 1px solid var(--edge); }
+  th { color: var(--med); font-weight: 400; }
+  td { color: var(--high); }
+  .wrap { overflow-x: auto; }
+  #channels { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: .5rem; }
+  #channels label { display: flex; gap: .35rem; align-items: center; font-size: 12px; }
+  #channels button { width: 100%; }
+  .note { font-size: 12px; margin-bottom: .75rem; }
+  #error { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>aparat hardware test</h1>
+  <div id="error" class="mono" role="alert"></div>
+
+  <section>
+    <h2>1 audio device</h2>
+    <div class="row">
+      <button id="list">list devices</button>
+      <select id="sink" aria-label="output device"><option value="">system default</option></select>
+      <button id="start">start audio</button>
+    </div>
+    <p class="note">list devices asks for microphone permission. the browser only shows device names after that.</p>
+    <pre id="audioInfo">not started</pre>
+  </section>
+
+  <section>
+    <h2>2 channels</h2>
+    <p class="note">turn your monitors down first. each channel plays its own pitch, rising with the channel number. tick the channels you actually hear.</p>
+    <div class="row">
+      <label for="level">level</label>
+      <input id="level" type="range" min="-60" max="-6" step="1" value="-30">
+      <span id="levelText" class="mono">-30 db</span>
+      <button id="walk" disabled>walk all channels</button>
+      <button id="allOff" disabled>all off</button>
+    </div>
+    <div id="channels"></div>
+  </section>
+
+  <section>
+    <h2>3 midi</h2>
+    <div class="row">
+      <button id="midiEnable">enable midi</button>
+      <select id="midiOut" aria-label="midi output"><option value="">no output</option></select>
+      <button id="sendNote" disabled>send note</button>
+      <button id="sendCc" disabled>send cc 1</button>
+      <button id="ping" disabled>message round trip</button>
+    </div>
+    <pre id="midiInfo">not enabled</pre>
+    <pre id="midiLog" class="mono"></pre>
+  </section>
+
+  <section>
+    <h2>4 module budget</h2>
+    <p class="note">silent. takes up to about 30 seconds. audio may crackle at the top of the ramp, that is the point. keep this tab in front.</p>
+    <div class="row"><button id="bench" disabled>run budget test</button><span id="benchStatus" class="mono"></span></div>
+    <div class="wrap">
+      <table>
+        <thead><tr><th>modules</th><th>cables</th><th>avg ms</th><th>load</th><th>max ms</th><th>blocks over</th><th>peak post ms</th><th>plain ms</th><th>peak msgs</th></tr></thead>
+        <tbody id="benchRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>report</h2>
+    <div class="row"><button id="copy">copy report</button></div>
+    <pre id="report"></pre>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

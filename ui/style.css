@@ -1,0 +1,199 @@
+/* colours from velak.klingt.org */
+:root {
+  --background: #0c0c0c;
+  --panel: #181818;
+  --panel-out: #111111;
+  --edge: #272727;
+  --f-low: #595959;
+  --f-med: #808080;
+  --f-high: #9c9c9c;
+  --accent: #ed2c3e;
+}
+
+* { box-sizing: border-box; margin: 0; }
+
+html, body { height: 100%; }
+
+body {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  background: var(--background);
+  color: var(--f-med);
+  font: 12px/1.4 Inter, sans-serif;
+  text-transform: lowercase;
+  overflow: hidden;
+  user-select: none;
+}
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+  align-items: center;
+  padding: .5rem 1rem;
+  border-bottom: 1px solid var(--edge);
+}
+
+h1 { font-size: 1.25rem; font-weight: 600; color: var(--f-high); letter-spacing: -.02em; }
+
+.group { display: flex; gap: .25rem; align-items: center; }
+
+button, select {
+  font: inherit;
+  text-transform: inherit;
+  padding: .2rem .5rem;
+  background: var(--panel);
+  color: var(--f-med);
+  border: 1px solid var(--edge);
+  cursor: pointer;
+}
+select { max-width: 11rem; }
+button:hover, select:hover { color: var(--f-high); border-color: var(--f-low); }
+button.on { background: var(--f-high); color: var(--background); }
+#record.on { background: var(--accent); color: var(--background); }
+:focus-visible { outline: 1px solid var(--f-high); outline-offset: 1px; }
+
+.status {
+  margin-left: auto;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  font-family: "Roboto Mono", monospace;
+}
+#clip { display: flex; gap: 2px; }
+#clip i { display: block; width: 6px; height: 10px; background: var(--edge); }
+#clip i.on { background: var(--accent); }
+
+#error { color: var(--accent); font-family: "Roboto Mono", monospace; padding: 0 1rem; }
+#error:empty { display: none; }
+
+#workspace { display: grid; grid-template-columns: 8rem 1fr; min-height: 0; }
+
+#library {
+  overflow-y: auto;
+  padding: .5rem;
+  border-right: 1px solid var(--edge);
+  scrollbar-width: thin;
+  scrollbar-color: var(--f-low) transparent;
+}
+#library button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: .15rem .25rem;
+}
+#library button:hover { background: var(--panel); }
+
+#stage { position: relative; min-width: 0; min-height: 0; }
+#rack {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--f-low) transparent;
+}
+#content { position: relative; }
+#cables { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+footer {
+  padding: .25rem 1rem;
+  border-top: 1px solid var(--edge);
+  color: var(--f-low);
+  font-size: 11px;
+}
+
+.module {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  height: 380px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+}
+.module.selected { border-color: var(--accent); }
+
+.title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .25rem .4rem;
+  color: var(--f-high);
+  font-weight: 600;
+  cursor: grab;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.title button {
+  background: none;
+  border: 0;
+  padding: 0 .1rem;
+  line-height: 1;
+  color: var(--f-low);
+  visibility: hidden;
+}
+.module:hover .title button, .title button:focus-visible { visibility: visible; }
+
+.display { display: block; width: calc(100% - .8rem); height: 110px; margin: 0 .4rem .4rem; background: var(--panel-out); }
+
+.knobs {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  gap: .35rem .1rem;
+  padding: .25rem;
+  justify-items: center;
+}
+
+.knob { display: flex; flex-direction: column; align-items: center; width: 100%; cursor: ns-resize; touch-action: none; }
+.dial {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--f-low);
+  background: var(--panel-out);
+}
+.dial::after {
+  content: "";
+  position: absolute;
+  left: calc(50% - 1px);
+  top: 1px;
+  width: 2px;
+  height: 10px;
+  background: var(--f-high);
+}
+.knob:hover .dial { border-color: var(--f-med); }
+.knob.learn .dial { border-color: var(--accent); }
+.knob.mapped .dial { border-style: dashed; }
+.knob span {
+  margin-top: 2px;
+  font-size: 10px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.knob.active span { color: var(--f-high); font-family: "Roboto Mono", monospace; text-transform: none; }
+
+.ports {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: .3rem 0;
+  padding: .35rem .2rem;
+  justify-items: center;
+}
+.inputs { margin-top: auto; }
+.outputs { background: var(--panel-out); border-top: 1px solid var(--edge); }
+
+.port { display: flex; flex-direction: column; align-items: center; font-size: 10px; }
+.jack {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--f-med);
+  background: var(--background);
+  cursor: crosshair;
+  touch-action: none;
+}
+.jack:hover { border-color: var(--f-high); }
+.outputs .jack { background: var(--f-low); }
