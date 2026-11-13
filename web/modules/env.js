@@ -1,3 +1,5 @@
+import { pole } from './lib/dsp.js';
+
 const IDLE = 0;
 const ATTACK = 1;
 const DECAY = 2;
@@ -31,15 +33,15 @@ export default {
 
     if (p[0] !== s.ta) {
       s.ta = p[0];
-      s.ca = 1 - Math.exp(-1 / (s.ta * s.sr));
+      s.ca = pole(s.ta, s.sr);
     }
     if (p[1] !== s.td) {
       s.td = p[1];
-      s.cd = 1 - Math.exp(-1 / (s.td * s.sr));
+      s.cd = pole(s.td, s.sr);
     }
     if (p[3] !== s.tr) {
       s.tr = p[3];
-      s.cr = 1 - Math.exp(-1 / (s.tr * s.sr));
+      s.cr = pole(s.tr, s.sr);
     }
 
     if (s.stage === ATTACK) {
@@ -50,6 +52,7 @@ export default {
       }
     } else if (s.stage === DECAY) {
       s.v += (p[2] - s.v) * s.cd;
+      if (s.v < 1e-20) s.v = 0; // sustain 0 would otherwise end in denormals
     } else if (s.stage === RELEASE) {
       s.v -= s.v * s.cr;
       if (s.v < 1e-5) {

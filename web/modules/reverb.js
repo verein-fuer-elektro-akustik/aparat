@@ -47,7 +47,9 @@ export default {
   process(s, i, o, p) {
     const fb = p[0] * 0.28 + 0.7;
     const damp = p[1] * 0.4;
-    const x = i[0] * 0.015;
+    // the tiny offset keeps the feedback paths out of denormals in silence;
+    // the output's dc blocker removes it
+    const x = i[0] * 0.015 + 1e-18;
     const l = side(s, x, s.combsL, s.allsL, fb, damp);
     const r = side(s, x, s.combsR, s.allsR, fb, damp);
     o[0] = i[0] * (1 - p[2]) + l * 3 * p[2];

@@ -1,7 +1,9 @@
 // Master clock in bpm. Gates at 50% duty for bar, quarter, eighth and
 // sixteenth notes. Swing delays every second sixteenth. Starting (run going
 // high) or a reset trigger restarts at the top of the bar and sends a short
-// reset pulse, so sequencers can follow.
+// reset pulse, so sequencers can follow. On a restart the gates are low for
+// one sample, so the first step always starts with a rising edge, even when a
+// gate was high at the moment of the reset.
 
 const pct = (v) => `${Math.round(v * 100)}%`;
 
@@ -19,7 +21,8 @@ export default {
   process(s, i, o, p) {
     const run = p[2] > 0.5 && i[0] > 1;
     const reset = i[1] > 1;
-    if ((run && !s.running) || (reset && !s.reset)) {
+    const restart = (run && !s.running) || (reset && !s.reset);
+    if (restart) {
       s.ph = 0;
       s.pulse = Math.round(s.sr * 0.005);
     }
@@ -27,7 +30,7 @@ export default {
     s.reset = reset;
     o[4] = s.pulse > 0 ? 10 : 0;
     if (s.pulse > 0) s.pulse--;
-    if (!run) {
+    if (!run || restart) {
       o[0] = o[1] = o[2] = o[3] = 0;
       return;
     }

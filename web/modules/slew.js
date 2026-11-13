@@ -22,7 +22,9 @@ export default {
       s.cf = pole(p[1], s.sr);
     }
     const x = i[0];
-    s.y += (x - s.y) * (x > s.y ? s.cr : s.cf);
-    o[0] = s.y;
+    let y = s.y + (x - s.y) * (x > s.y ? s.cr : s.cf);
+    if (y < 1e-20 && y > -1e-20) y = 0; // no denormals when settling on 0
+    s.y = y;
+    o[0] = y;
   },
 };

@@ -1,4 +1,5 @@
 // Sound card input. The UI asks for microphone access when this is added.
+// The engine gets the first 8 input channels (see ui/audio.js).
 
 export default {
   name: 'input',
@@ -6,7 +7,7 @@ export default {
   inputs: {},
   outputs: ['1', '2', '3', '4'],
   params: {
-    first: { min: 1, max: 29, default: 1, step: 1, format: (v) => `${v}-${v + 3}` },
+    first: { min: 1, max: 5, default: 1, step: 1, format: (v) => `${v}-${v + 3}` },
     gain: { min: 0, max: 4, default: 1 },
   },
   create: (sr, host) => ({ host }),

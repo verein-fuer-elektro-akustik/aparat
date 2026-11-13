@@ -35,6 +35,26 @@ import chance from './chance.js';
 import crush from './crush.js';
 import quant from './quant.js';
 
+// A module is a plain object, imported by both the UI and the audio worklet,
+// so it must not touch the DOM:
+//
+//   name, cols           menu name, panel width in grid cells
+//   inputs               {name: value while unpatched}
+//   outputs              [names]
+//   params               {name: {min, max, default, step?, curve?, format?}};
+//                        min 0, max 1, step 1 shows as an on/off button
+//   create(sr, host)     the state; host has in (sound card), out, midi()
+//   process(s, in, out, p)  one sample; in, out and p are arrays in the
+//                        order of inputs, outputs and params
+//   onMidi(s, data, p)   optional, incoming midi bytes
+//   display(s)           optional, data drawn on the panel at frame rate
+//   displayKnob          optional, display() returns the knob to outline
+//   destroy(s)           optional, called when the module is removed
+//   bypass               optional {output: input}, see below
+//
+// Voltages follow VCV Rack: audio ±5 V, 1 V/oct, gates and triggers 10 V
+// (read as high above 1 V).
+
 // order of the add-module menu: sources, timing, drums, shaping, effects,
 // utilities, i/o
 export const defs = [

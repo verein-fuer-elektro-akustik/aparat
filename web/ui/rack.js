@@ -4,7 +4,7 @@ import { makeKnob } from './knob.js';
 // The rack is a grid of square cells. A module is CELLS cells tall, so the
 // rack is made of rows CELLS cells high. A module is as many cells wide as it
 // has columns of knobs and jacks (def.cols). Keep in sync with --cell in style.css.
-export const CELL = 48;
+const CELL = 48;
 const CELLS = 8;
 const ROW = CELL * CELLS;
 const EDGE = 40;
@@ -34,6 +34,7 @@ export class Rack {
     this.nextSlot = 0;
     this.selected = null;
     this.learning = null;
+    this.dragging = false; // a module or cable is being dragged
     this.midiMap = [];
     this.rows = 1;
     this.drop = div('drop', content);
@@ -116,7 +117,14 @@ export class Rack {
     return m;
   }
 
+  // Undo and redo rebuild modules as new objects with the same id, so a menu
+  // opened before may still hold the old one; operations ignore those.
+  live(m) {
+    return !!m && this.modules.get(m.id) === m;
+  }
+
   remove(m) {
+    if (!this.live(m)) return;
     for (const c of [...this.cables.list]) {
       if (c.from.m === m || c.to.m === m) this.disconnect(c);
     }
@@ -176,17 +184,20 @@ export class Rack {
   // effect off is not a sound). Going through the knob's normalised
   // range respects exponential curves and steps, and sends each to the engine.
   randomize(m) {
+    if (!this.live(m)) return;
     m.knobs.forEach((k, i) => {
       if (m.keys[i] !== 'bypass') k.setNorm(Math.random());
     });
   }
 
   resetParams(m) {
+    if (!this.live(m)) return;
     for (const k of m.knobs) k.reset();
   }
 
   // A copy with the same settings, right of the original.
   duplicate(m) {
+    if (!this.live(m)) return null;
     const params = Object.fromEntries(m.keys.map((k, i) => [k, m.values[i]]));
     const copy = this.insert(m.type, { x: m.x + m.def.cols, row: m.row }, params);
     this.select(copy);
@@ -667,6 +678,7 @@ export class Rack {
     const snap = new Map([...this.modules.values()].map((o) => [o, { x: o.x, row: o.row }]));
     const start = this.pointer(e);
     const grab = { x: start.x - m.left, y: start.y - m.top };
+    this.dragging = true;
     m.el.classList.add('dragging');
     this.drop.style.width = `${m.def.cols * CELL}px`;
     this.drop.style.height = `${ROW}px`;
@@ -688,6 +700,7 @@ export class Rack {
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
       window.removeEventListener('keydown', key);
+      this.dragging = false;
       if (cancel) {
         for (const [o, s] of snap) {
           o.x = s.x;
@@ -731,11 +744,15 @@ export class Rack {
       else this.cables.setGhost(p, anchor);
     };
     draw(this.pointer(e));
+    this.dragging = true;
     const move = (ev) => draw(this.pointer(ev));
     const up = (ev) => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      this.dragging = false;
       this.cables.setGhost(null);
+      if (ev.type === 'pointercancel') return;
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
       if (!el?.classList.contains('jack')) return;
       const target = this.modules.get(Number(el.dataset.module));
@@ -746,6 +763,7 @@ export class Rack {
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   // displays

@@ -1,20 +1,16 @@
+// White and pink noise (pink: Paul Kellet's economy filter).
+
+import { seed, white } from './lib/dsp.js';
+
 export default {
   name: 'noise',
   cols: 2,
   inputs: {},
   outputs: ['white', 'pink'],
   params: {},
-  create: () => ({
-    x: (Math.random() * 0x7fffffff) | 1,
-    b0: 0,
-    b1: 0,
-    b2: 0,
-  }),
+  create: () => ({ x: seed(), b0: 0, b1: 0, b2: 0 }),
   process(s, i, o) {
-    s.x ^= s.x << 13;
-    s.x ^= s.x >>> 17;
-    s.x ^= s.x << 5;
-    const w = (s.x | 0) / 2147483648;
+    const w = white(s);
     s.b0 = 0.99765 * s.b0 + w * 0.099046;
     s.b1 = 0.963 * s.b1 + w * 0.2965164;
     s.b2 = 0.57 * s.b2 + w * 1.0526913;

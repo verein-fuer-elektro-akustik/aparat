@@ -13,7 +13,11 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 DRY=
-[[ ${1:-} == -n ]] && DRY=-n
+case ${1:-} in
+  -n) DRY=-n ;;
+  '') ;;
+  *) echo "usage: $0 [-n]   (-n: dry run)" >&2; exit 2 ;;
+esac
 
 [[ -f deploy.env ]] || { echo "no deploy.env, copy deploy.env.example and adjust it" >&2; exit 1; }
 set -a
@@ -21,7 +25,18 @@ set -a
 set +a
 for v in DEPLOY_HOST WEB_DIR APP_DIR NGINX_DIR PRESETS_DIR API_HOST API_PORT PUBLIC_URL; do
   [[ -n ${!v:-} ]] || { echo "deploy.env: $v is not set" >&2; exit 1; }
+  [[ $v != *_DIR || ${!v} == /* ]] || { echo "deploy.env: $v must be an absolute path" >&2; exit 1; }
+  declare "$v=${!v%/}"
 done
+
+# rsync --delete must never reach stored presets or the other directory
+within() { [[ $1 == "$2" || $1 == "$2"/* ]]; }
+fail() { echo "deploy.env: $*" >&2; exit 1; }
+if within "$WEB_DIR" "$APP_DIR" || within "$APP_DIR" "$WEB_DIR"; then fail "WEB_DIR and APP_DIR must not contain each other"; fi
+if within "$PRESETS_DIR" "$WEB_DIR"; then fail "PRESETS_DIR must not be inside WEB_DIR"; fi
+if within "$PRESETS_DIR" "$APP_DIR" && ! within "$PRESETS_DIR" "$APP_DIR/data"; then
+  fail "PRESETS_DIR inside APP_DIR must be under APP_DIR/data, which deploys keep"
+fi
 
 step() { printf '\n== %s\n' "$*"; }
 RSYNC=(rsync -rlptz --mkpath --delete --itemize-changes $DRY)
@@ -32,8 +47,8 @@ echo ok
 [[ -z $(git status --porcelain) ]] || echo "note: deploying uncommitted changes"
 
 step "directories on $DEPLOY_HOST"
-[[ -n $DRY ]] || ssh "$DEPLOY_HOST" mkdir -p "$WEB_DIR" "$APP_DIR" "$PRESETS_DIR"
-echo "$WEB_DIR $APP_DIR"
+[[ -n $DRY ]] || ssh "$DEPLOY_HOST" mkdir -p "$WEB_DIR" "$APP_DIR" "$PRESETS_DIR" "$NGINX_DIR"
+echo "$WEB_DIR $APP_DIR $NGINX_DIR"
 
 step "frontend -> $DEPLOY_HOST:$WEB_DIR"
 "${RSYNC[@]}" --exclude /test/ web/ "$DEPLOY_HOST:$WEB_DIR/"
@@ -43,16 +58,16 @@ step "api -> $DEPLOY_HOST:$APP_DIR"
 "${RSYNC[@]}" --exclude /test/ --exclude node_modules/ \
   --filter='P /data/' --filter='P /.env' --filter='P /systemd/' \
   server/ "$DEPLOY_HOST:$APP_DIR/"
-"${RSYNC[@]}" systemd/aparat.service "$DEPLOY_HOST:$APP_DIR/systemd/aparat.service" 2>/dev/null \
-  || [[ -n $DRY ]]
+"${RSYNC[@]}" systemd/aparat.service "$DEPLOY_HOST:$APP_DIR/systemd/"
 
-# nginx config, aparat.conf with the paths and port from deploy.env
+# nginx config, aparat.conf with the paths and port from deploy.env. Compared
+# by content only (no -t), so an unchanged config prints nothing.
 step "nginx config -> $DEPLOY_HOST:$NGINX_DIR"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 sed -e "s|@WEB_DIR@|$WEB_DIR|g" -e "s|@API@|$API_HOST:$API_PORT|g" nginx/aparat.conf > "$tmp/aparat.conf"
 cp nginx/aparat-locations.conf "$tmp/"
-NGINX_CHANGED=$(rsync -rlptz --checksum --itemize-changes $DRY \
+NGINX_CHANGED=$(rsync -rlpz --checksum --mkpath --itemize-changes $DRY \
   "$tmp/aparat.conf" "$tmp/aparat-locations.conf" "$DEPLOY_HOST:$NGINX_DIR/")
 if [[ -n $NGINX_CHANGED ]]; then echo "$NGINX_CHANGED"; else echo unchanged; fi
 
@@ -76,9 +91,10 @@ PRESETS_DIR=$PRESETS_DIR
 ENV
 
 # the unit from systemd/aparat.service, with this host's paths
+node=$(command -v node) || { echo "node not found in the PATH of a non-interactive shell" >&2; exit 1; }
 unit=~/.config/systemd/user/aparat.service
 mkdir -p "$(dirname "$unit")"
-sed -e "s|@APP_DIR@|$APP_DIR|g" -e "s|@NODE@|$(command -v node)|g" \
+sed -e "s|@APP_DIR@|$APP_DIR|g" -e "s|@NODE@|$node|g" \
   "$APP_DIR/systemd/aparat.service" > "$unit"
 
 systemctl --user daemon-reload
@@ -86,7 +102,12 @@ systemctl --user enable --quiet aparat.service
 systemctl --user restart aparat.service
 sleep 1
 systemctl --user is-active aparat.service
-curl -fsS -o /dev/null "http://$API_HOST:$API_PORT/api/presets" && echo "api answers on $API_HOST:$API_PORT"
+if curl -fsS -o /dev/null "http://$API_HOST:$API_PORT/api/presets"; then
+  echo "api answers on $API_HOST:$API_PORT"
+else
+  echo "api does not answer, see: journalctl --user -u aparat -n 50" >&2
+  exit 1
+fi
 
 if [[ $(loginctl show-user "$USER" -p Linger --value) != yes ]]; then
   echo "warning: lingering is off, so the service stops when you log out and"

@@ -20,7 +20,7 @@ function formatValue(def, v) {
 
 // A parameter that is only off (0) or on (1) is drawn as a button that flips
 // on click. It keeps the knob interface, so random, reset and midi learn work.
-export const isToggle = (def) => def.min === 0 && def.max === 1 && def.step === 1;
+const isToggle = (def) => def.min === 0 && def.max === 1 && def.step === 1;
 
 export function makeKnob({ name, def, value, onChange, onLearn }) {
   const toggle = isToggle(def);
@@ -147,8 +147,5 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
     setValue,
     setNorm,
     reset: () => setNorm(toNorm(def, def.default)),
-    get value() {
-      return current;
-    },
   };
 }

@@ -24,20 +24,20 @@ function send(res, status, body, type = 'application/json; charset=utf-8') {
   res.end(data);
 }
 
+const tooLarge = () => new PresetError(413, `presets are limited to ${MAX_BYTES} bytes`);
+
+// Bodies without a content-length (chunked) are counted as they arrive. Past
+// the limit the rest is read and dropped, so the 413 reaches the client
+// instead of a reset connection.
 function readBody(req) {
   return new Promise((ok, fail) => {
     const chunks = [];
     let size = 0;
     req.on('data', (c) => {
       size += c.length;
-      if (size > MAX_BYTES) {
-        fail(new PresetError(413, `presets are limited to ${MAX_BYTES} bytes`));
-        req.destroy();
-        return;
-      }
-      chunks.push(c);
+      if (size <= MAX_BYTES) chunks.push(c);
     });
-    req.on('end', () => ok(Buffer.concat(chunks).toString('utf8')));
+    req.on('end', () => (size > MAX_BYTES ? fail(tooLarge()) : ok(Buffer.concat(chunks).toString('utf8'))));
     req.on('error', fail);
   });
 }
@@ -58,7 +58,9 @@ async function api(req, res, store, path) {
       return send(res, 200, await store.get(name));
     case 'PUT': {
       if (Number(req.headers['content-length']) > MAX_BYTES) {
-        throw new PresetError(413, `presets are limited to ${MAX_BYTES} bytes`);
+        // the body is not read, so the connection cannot be reused
+        res.setHeader('connection', 'close');
+        throw tooLarge();
       }
       let patch;
       try {

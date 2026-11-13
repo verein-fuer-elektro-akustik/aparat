@@ -11,15 +11,17 @@ const SCALES = [
   ['maj pent', [0, 2, 4, 7, 9]],
 ];
 const NOTES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
+// the degrees with the octave above, so notes near the top snap upwards
+const DEGREES = SCALES.map(([, d]) => [...d, 12]);
 
-export function quantize(v, scale, root) {
-  const degrees = SCALES[scale][1];
+function quantize(v, scale, root) {
+  const degrees = DEGREES[scale];
   const semis = v * 12 - root;
   const oct = Math.floor(semis / 12);
   const within = semis - oct * 12;
   let best = 0;
   let dist = Infinity;
-  for (const d of [...degrees, 12]) {
+  for (const d of degrees) {
     const e = Math.abs(within - d);
     if (e < dist) {
       dist = e;
@@ -41,6 +43,7 @@ export default {
   create: (sr) => ({ sr, last: NaN, pulse: 0 }),
   process(s, i, o, p) {
     const v = quantize(i[0], Math.round(p[0]), Math.round(p[1]));
+    if (s.last !== s.last) s.last = v; // first sample: nothing changed yet
     if (v !== s.last) {
       s.last = v;
       s.pulse = Math.round(s.sr * 0.002);

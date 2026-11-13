@@ -31,11 +31,17 @@ export class AudioEngine {
     const options = { latencyHint: 'interactive' };
     if (sinkId) options.sinkId = sinkId;
     const ctx = new AudioContext(options);
-    await ctx.audioWorklet.addModule('engine/processor.js');
-    await Promise.race([
-      ctx.resume(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('audio did not start')), START_TIMEOUT)),
-    ]);
+    try {
+      // relative to this file, not to the page, whose url changes with presets
+      await ctx.audioWorklet.addModule(new URL('../engine/processor.js', import.meta.url));
+      await Promise.race([
+        ctx.resume(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('audio did not start')), START_TIMEOUT)),
+      ]);
+    } catch (err) {
+      ctx.close().catch(() => {});
+      throw err;
+    }
 
     const dest = ctx.destination;
     const channels = Math.min(Math.max(dest.maxChannelCount, 1), MAX_CHANNELS);

@@ -171,6 +171,7 @@ class Aparat extends AudioWorkletProcessor {
     this.midiMods = this.midiMods.filter((m) => m !== mod);
     this.displayMods = this.displayMods.filter((m) => m !== mod);
     this.smooth = this.smooth.filter((e) => e.arr !== mod.param);
+    mod.def.destroy?.(mod.state);
     release(this.inPool, mod.inAt, mod.nIn);
     release(this.outPool, mod.outAt, mod.nOut);
   }
@@ -263,6 +264,9 @@ class Aparat extends AudioWorkletProcessor {
     const nMods = mods.length;
     const nCables = this.nActive;
 
+    // channels the input does not have (any more) read as silence
+    hostIn.fill(0, inChannels);
+
     for (let f = 0; f < frames; f++) {
       for (let c = 0; c < inChannels; c++) hostIn[c] = input[c][f];
       if (this.smooth.length) this.runSmoothing();
@@ -274,10 +278,14 @@ class Aparat extends AudioWorkletProcessor {
           m.process(m.state, m.in, m.out, m.param);
           continue;
         }
-        // bypass: fade between the module and its inputs; fully bypassed
-        // modules are not run at all
+        // bypass: fade between the module and its inputs. Fully bypassed
+        // modules are not run at all and start over from a fresh state, so
+        // a delay or reverb does not replay an old tail when switched back.
         const target = m.param[b.p];
-        if (b.mix !== target) b.mix = target > b.mix ? Math.min(1, b.mix + b.step) : Math.max(0, b.mix - b.step);
+        if (b.mix !== target) {
+          b.mix = target > b.mix ? Math.min(1, b.mix + b.step) : Math.max(0, b.mix - b.step);
+          if (b.mix === 1) m.state = m.def.create(sampleRate, this.host);
+        }
         const mi = m.in;
         const mo = m.out;
         const src = b.src;

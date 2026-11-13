@@ -63,14 +63,26 @@ test('stores, lists, loads and overwrites a preset', async () => {
 });
 
 test('accepts names in any script', async () => {
-  for (const name of ['Rückkopplung', 'клинг', 'a-b_c.d (2)', '音']) {
+  for (const name of ['Rückkopplung', 'клинг', 'a-b_c.d (2)', '音', 'हिन्दी', 'ภาษาไทย', '#1 & co']) {
     assert.equal((await put(name, patch)).status, 200, name);
     assert.deepEqual(await (await fetch(url(name))).json(), patch);
   }
 });
 
+test('treats composed and decomposed names as one preset', async () => {
+  const composed = 'Grün';
+  const decomposed = composed.normalize('NFD');
+  assert.notEqual(composed, decomposed);
+  assert.equal((await put(decomposed, { ...patch, v: 7 })).status, 200);
+  assert.equal((await (await fetch(url(composed))).json()).v, 7);
+  assert.equal((await fetch(url(decomposed), { method: 'DELETE' })).status, 204);
+  assert.equal((await fetch(url(composed))).status, 404);
+});
+
 test('rejects bad names', async () => {
-  for (const name of ['', '.hidden', '..', ' lead', 'trail ', 'a/b', 'a\\b', 'x'.repeat(65), 'tab\there']) {
+  // the last two fit in 64 characters but their encoded file names exceed 255 bytes
+  const long = ['я'.repeat(64), '音'.repeat(30)];
+  for (const name of ['', '.hidden', '..', ' lead', 'trail ', 'a/b', 'a\\b', 'x'.repeat(65), 'tab\there', '\u0301a', ...long]) {
     const res = await put(name, patch);
     // '' and '..' never reach the name check: '' is the list url, '..' is normalised away
     const expected = { '': 405, '..': 404 }[name] ?? 400;
@@ -86,6 +98,15 @@ test('rejects bad bodies', async () => {
   assert.equal((await put('x', { modules: [], cables: 3 })).status, 400);
   const big = { modules: [], pad: 'x'.repeat(1024 * 1024) };
   assert.equal((await put('x', big)).status, 413);
+  // without a content-length the limit is counted while reading
+  const chunked = new ReadableStream({
+    start(c) {
+      c.enqueue(new TextEncoder().encode(JSON.stringify(big)));
+      c.close();
+    },
+  });
+  const res = await fetch(url('x'), { method: 'PUT', body: chunked, duplex: 'half' });
+  assert.equal(res.status, 413);
   assert.equal((await fetch(url('x'))).status, 404);
 });
 

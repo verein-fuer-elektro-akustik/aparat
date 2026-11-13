@@ -54,7 +54,6 @@ const midi = new Midi({
   inSelect: $('midiIn'),
   outSelect: $('midiOut'),
   onMessage: onMidiMessage,
-  onChange: () => {},
 });
 
 const rack = new Rack({
@@ -109,6 +108,9 @@ const undo = {
     this.commit();
     const to = this.at + dir;
     if (to < 0 || to >= this.stack.length) return;
+    // menus opened before may refer to modules that apply() replaces
+    closeContext();
+    closeMenu();
     this.at = to;
     this.quiet = true;
     try {
@@ -118,7 +120,7 @@ const undo = {
     }
     // module and cable order can differ after apply; keep what the rack now says
     this.stack[to] = this.snapshot();
-    if (rack.selected && !rack.modules.has(rack.selected.id)) rack.select(null);
+    if (rack.selected && !rack.live(rack.selected)) rack.select(null);
     this.buttons();
   },
   buttons() {
@@ -211,7 +213,8 @@ function loadPatch(patch) {
     undo.quiet = false;
   }
   undo.commit();
-  midi.setPorts(patch.midi?.in, patch.midi?.out);
+  // a patch without midi settings (new, default, older files) keeps the ports
+  if (patch.midi) midi.setPorts(patch.midi.in, patch.midi.out);
   if (usesInput()) audio.openInput().catch(showError);
 }
 
@@ -229,12 +232,16 @@ function presetFromPath() {
   }
 }
 
-// Show the loaded preset as a link that can be shared, or the plain app url.
+// The preset the rack shows, or null for none: as a link that can be shared
+// (or the plain app url), in the header and the menu, and in the name field,
+// so storing (also ctrl+s) never writes over a preset the rack no longer shows.
 function showPresetInUrl(name) {
   const url = name ? new URL(`preset/${encodeURIComponent(name)}`, appRoot) : appRoot;
   if (url.href !== location.href) history.replaceState(null, '', url);
   $('presetCurrent').textContent = name ?? '';
+  $('presetName').value = name ?? '';
   markCurrentPreset();
+  updatePresetButtons();
 }
 
 // engine messages
@@ -298,7 +305,12 @@ function onMidiMessage(data) {
 
 async function startAudio() {
   stopRecording();
-  await audio.start($('device').value);
+  try {
+    await audio.start($('device').value);
+  } catch (err) {
+    await stopAudio();
+    throw err;
+  }
   rack.replay();
   buildClipLamps();
   $('channels').textContent = `${audio.channels} ch · ${audio.ctx.sampleRate} hz`;
@@ -589,6 +601,7 @@ $('presetDelete').addEventListener('click', guarded(async () => {
   if (factory) {
     // reverted: show the factory version
     loadPatch(await presets.load(name));
+    showPresetInUrl(name);
     flash(button, 'reverted');
     return;
   }
@@ -647,6 +660,8 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (typing(e.target)) return;
+  // edits during a drag would fight with the layout the drag works on
+  if (rack.dragging && e.key !== 'Escape') return;
   if (e.key === 'Escape') {
     rack.select(null);
     rack.cables.selected = null;
@@ -688,7 +703,6 @@ const startPreset = presetFromPath();
 if (startPreset) {
   try {
     loadPatch(await presets.load(startPreset));
-    $('presetName').value = startPreset;
     showPresetInUrl(startPreset);
   } catch (err) {
     showError(`could not load preset "${startPreset}": ${err.message.replace(/^preset: /, '')}`);
@@ -699,9 +713,10 @@ if (startPreset) {
   loadPatch(defaultPatch);
   showPresetInUrl(null);
 }
+let savedZoom = 1;
 try {
-  const z = Number(localStorage.getItem('aparat.zoom'));
-  if (z) zoomTo(z, 0, 0);
+  savedZoom = Number(localStorage.getItem('aparat.zoom')) || 1;
 } catch {}
+zoomTo(savedZoom);
 undo.reset();
 window.aparat = { rack, audio, midi, undo };

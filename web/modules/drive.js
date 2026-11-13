@@ -23,7 +23,9 @@ export default {
     }
     const drive = p[0] * Math.pow(2, i[1] / 2);
     const x = Math.tanh((i[0] / 5) * drive + p[1]) - Math.tanh(p[1]);
-    s.y += (x - s.y) * s.c;
-    o[0] = 5 * p[3] * s.y;
+    let y = s.y + (x - s.y) * s.c;
+    if (y < 1e-20 && y > -1e-20) y = 0; // no denormals when settling on 0
+    s.y = y;
+    o[0] = 5 * p[3] * y;
   },
 };

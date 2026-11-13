@@ -12,7 +12,7 @@ const len = { min: 1, max: 32, default: 16, step: 1, format: (v) => `${v}` };
 const hits = { min: 0, max: 32, default: 4, step: 1, format: (v) => `${v}` };
 const rot = { min: 0, max: 31, default: 0, step: 1, format: (v) => `${v}` };
 
-export function euclidHit(step, n, h, r) {
+function euclidHit(step, n, h, r) {
   if (h <= 0) return false;
   if (h > n) h = n;
   const idx = (((step - r) % n) + n) % n;

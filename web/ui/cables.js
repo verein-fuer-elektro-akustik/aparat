@@ -1,7 +1,7 @@
 // One canvas above the panels. Every cable changes on every frame, so it is
 // redrawn whole. Alpha values are bucketed to keep the number of strokes small.
 
-export const SEGMENTS = 32;
+const SEGMENTS = 32;
 const BUCKETS = 8;
 const BASE = 0.12;
 const WAVE_K = 0.7;

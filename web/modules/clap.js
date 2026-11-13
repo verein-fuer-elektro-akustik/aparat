@@ -23,6 +23,8 @@ export default {
     const tail = s.t - 3 * spread;
     const env = tail < 0 ? Math.exp(-(s.t % spread) / (0.004 * sr)) : Math.exp(-tail / (p[0] * sr));
     if (env < 1e-5) {
+      // idle until the next trigger, also if decay is turned up later
+      s.t = 1e9;
       o[0] = 0;
       return;
     }

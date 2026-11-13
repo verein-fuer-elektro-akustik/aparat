@@ -2,21 +2,18 @@
 // Ports are remembered by name, ids are not stable across replugging.
 
 export class Midi {
-  constructor({ inSelect, outSelect, onMessage, onChange }) {
+  constructor({ inSelect, outSelect, onMessage }) {
     this.inSelect = inSelect;
     this.outSelect = outSelect;
     this.onMessage = onMessage;
-    this.onChange = onChange;
     this.access = null;
     this.inName = '';
     this.outName = '';
     inSelect.addEventListener('change', () => {
       this.inName = inSelect.value;
-      this.onChange();
     });
     outSelect.addEventListener('change', () => {
       this.outName = outSelect.value;
-      this.onChange();
     });
   }
 
@@ -24,8 +21,6 @@ export class Midi {
     if (!navigator.requestMIDIAccess) throw new Error('this browser has no web midi');
     this.access = await navigator.requestMIDIAccess({ sysex: false });
     this.access.onstatechange = () => this.refresh();
-    this.inSelect.hidden = false;
-    this.outSelect.hidden = false;
     this.refresh();
   }
 

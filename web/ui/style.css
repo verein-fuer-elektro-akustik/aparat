@@ -85,7 +85,6 @@ button.on { background: var(--f-high); color: var(--background); }
   white-space: nowrap;
 }
 .menu-items button:hover:not(:disabled), .menu-items button:focus-visible { background: var(--panel-out); color: var(--f-high); outline: none; }
-.menu-items button:disabled { color: var(--f-low); cursor: default; }
 .menu-items button.current::before { content: "▸ "; }
 .menu-items kbd { font: 10px/1.6 "Roboto Mono", monospace; color: var(--f-low); }
 .menu-items hr { border: 0; border-top: 1px solid var(--edge); margin: .25rem 0; }
@@ -229,15 +228,15 @@ button:disabled { color: var(--f-low); cursor: default; border-color: var(--edge
     linear-gradient(to right, var(--grid) 1px, transparent 1px),
     linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
   background-size: 100% calc(var(--cell) * 8), var(--cell) var(--cell), var(--cell) var(--cell);
+  cursor: grab;
 }
-#content { cursor: grab; }
-.module { cursor: default; }
 body.panning, body.panning * { cursor: grabbing !important; }
 .drop { position: absolute; border: 1px dashed var(--f-low); pointer-events: none; }
 #cables { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
 .module {
   position: absolute;
+  cursor: default;
   display: flex;
   flex-direction: column;
   overflow: hidden;
