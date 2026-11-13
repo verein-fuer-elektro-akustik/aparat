@@ -1,0 +1,369 @@
+/* colours from velak.klingt.org */
+:root {
+  --background: #0c0c0c;
+  --panel: #181818;
+  --panel-out: #111111;
+  --edge: #272727;
+  --f-low: #595959;
+  --f-med: #808080;
+  --f-high: #9c9c9c;
+  --accent: #ed2c3e;
+  --grid: #151515;
+  --cell: 48px;
+}
+
+[hidden] { display: none !important; }
+
+* { box-sizing: border-box; margin: 0; }
+
+html, body { height: 100%; }
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+  color: var(--f-med);
+  font: 12px/1.4 Inter, sans-serif;
+  text-transform: lowercase;
+  overflow: hidden;
+  user-select: none;
+}
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+  align-items: center;
+  padding: .5rem 1rem;
+  border-bottom: 1px solid var(--edge);
+}
+
+h1 { font-size: 1.25rem; font-weight: 600; color: var(--f-high); letter-spacing: -.02em; }
+
+.group { display: flex; gap: .25rem; align-items: center; }
+
+button, select {
+  font: inherit;
+  text-transform: inherit;
+  padding: .2rem .5rem;
+  background: var(--panel);
+  color: var(--f-med);
+  border: 1px solid var(--edge);
+  cursor: pointer;
+}
+select { max-width: 11rem; }
+button:hover, select:hover { color: var(--f-high); border-color: var(--f-low); }
+button.on { background: var(--f-high); color: var(--background); }
+#record.on { background: var(--accent); color: var(--background); }
+:focus-visible { outline: 1px solid var(--f-high); outline-offset: 1px; }
+
+/* menu bar */
+#menubar { display: flex; align-items: center; }
+.menu { position: relative; }
+.menu-title { background: none; border-color: transparent; }
+.menu.open .menu-title { background: var(--panel); border-color: var(--f-low); color: var(--f-high); }
+.menu-items {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 12;
+  min-width: 13rem;
+  padding: .25rem;
+  background: var(--panel);
+  border: 1px solid var(--f-low);
+  box-shadow: 0 8px 32px #000;
+}
+.menu-items button {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: .2rem .4rem;
+  white-space: nowrap;
+}
+.menu-items button:hover:not(:disabled), .menu-items button:focus-visible { background: var(--panel-out); color: var(--f-high); outline: none; }
+.menu-items button:disabled { color: var(--f-low); cursor: default; }
+.menu-items button.current::before { content: "▸ "; }
+.menu-items kbd { font: 10px/1.6 "Roboto Mono", monospace; color: var(--f-low); }
+.menu-items hr { border: 0; border-top: 1px solid var(--edge); margin: .25rem 0; }
+.menu-row { display: flex; gap: .25rem; align-items: center; padding: .2rem .4rem; }
+label.menu-row { justify-content: space-between; gap: 1rem; }
+.menu-row input, .menu-row select { flex: 1; min-width: 0; }
+.menu-row button { width: auto; flex: 1; justify-content: center; border: 1px solid var(--edge); background: var(--panel-out); }
+#presetItems { max-height: 50vh; overflow-y: auto; }
+#presetItems:not(:has(button)) { padding: .2rem .4rem; color: var(--f-low); }
+#presetCurrent { color: var(--f-high); font-family: "Roboto Mono", monospace; }
+
+.status {
+  margin-left: auto;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  font-family: "Roboto Mono", monospace;
+}
+#clip { display: flex; gap: 2px; }
+#clip i { display: block; width: 6px; height: 10px; background: var(--edge); }
+#clip i.on { background: var(--accent); }
+
+#error {
+  position: fixed;
+  top: .5rem;
+  right: .5rem;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: .35rem;
+  max-width: min(26rem, calc(100vw - 1rem));
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  padding: .45rem .7rem;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--accent);
+  color: var(--f-high);
+  font-family: "Roboto Mono", monospace;
+  text-transform: none;
+  box-shadow: 0 6px 24px #000;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+#menu {
+  position: fixed;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  width: 14rem;
+  max-height: min(36rem, calc(100vh - 1rem));
+  background: var(--panel);
+  border: 1px solid var(--f-low);
+  box-shadow: 0 8px 32px #000;
+}
+#ctx {
+  position: fixed;
+  z-index: 11;
+  min-width: 9rem;
+  padding: .25rem;
+  background: var(--panel);
+  border: 1px solid var(--f-low);
+  box-shadow: 0 8px 32px #000;
+}
+#ctxTitle { padding: .15rem .4rem .3rem; color: var(--f-low); border-bottom: 1px solid var(--edge); margin-bottom: .2rem; }
+#ctxItems button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: .2rem .4rem;
+}
+#ctxItems button:hover, #ctxItems button:focus { background: var(--panel-out); color: var(--f-high); outline: none; }
+#search {
+  font: inherit;
+  margin: .4rem;
+  padding: .25rem .4rem;
+  background: var(--panel-out);
+  color: var(--f-high);
+  border: 1px solid var(--edge);
+  outline: none;
+}
+#search:focus { border-color: var(--f-low); }
+#library {
+  overflow-y: auto;
+  padding: 0 .4rem .4rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--f-low) transparent;
+}
+#library button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: .15rem .3rem;
+}
+#library button:hover, #library button:focus-visible, #library button.first { background: var(--panel-out); color: var(--f-high); outline: none; }
+.hints {
+  list-style: none;
+  padding: .4rem .7rem .5rem;
+  border-top: 1px solid var(--edge);
+  color: var(--f-low);
+  font-size: 10px;
+}
+
+#stage { position: relative; flex: 1; min-width: 0; min-height: 0; }
+#rack {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--f-low) transparent;
+}
+#sizer { position: relative; overflow: hidden; }
+#presetName {
+  font: inherit;
+  width: 100%;
+  padding: .2rem .4rem;
+  background: var(--panel-out);
+  color: var(--f-high);
+  border: 1px solid var(--edge);
+  text-transform: none;
+}
+#presetName:focus { outline: none; border-color: var(--f-low); }
+button:disabled { color: var(--f-low); cursor: default; border-color: var(--edge); }
+#presetDelete.confirm { background: var(--accent); color: var(--background); }
+#content {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  background-color: var(--background);
+  background-image:
+    linear-gradient(to bottom, var(--edge) 1px, transparent 1px),
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: 100% calc(var(--cell) * 8), var(--cell) var(--cell), var(--cell) var(--cell);
+}
+#content { cursor: grab; }
+.module { cursor: default; }
+body.panning, body.panning * { cursor: grabbing !important; }
+.drop { position: absolute; border: 1px dashed var(--f-low); pointer-events: none; }
+#cables { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+.module {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  contain: strict;
+  background: var(--panel);
+}
+/* The edge is drawn on top instead of taking space, so the inside of a module
+   is exactly cols x 8 cells and lines up with the background grid. */
+.module::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--edge);
+  pointer-events: none;
+}
+.module.selected::after { border-color: var(--accent); }
+.module.dragging { z-index: 1; opacity: .85; box-shadow: 0 6px 24px #000; }
+.module.dragging .title { cursor: grabbing; }
+
+.title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: calc(var(--cell) / 2);
+  flex: none;
+  padding: 0 .4rem;
+  color: var(--f-high);
+  font-weight: 600;
+  cursor: grab;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.title button {
+  background: none;
+  border: 0;
+  padding: 0 .1rem;
+  line-height: 1;
+  color: var(--f-low);
+  visibility: hidden;
+}
+.module:hover .title button, .title button:focus-visible { visibility: visible; }
+
+.display { display: block; flex: none; width: calc(100% - .8rem); height: 110px; margin: 0 .4rem .4rem; background: var(--panel-out); }
+
+/* Knobs and jacks sit in fixed one-cell boxes. Nothing inside them may change
+   size, so hovering (which swaps a label for the value) never moves anything. */
+.knobs, .ports {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(var(--cols), var(--cell));
+  grid-auto-rows: var(--cell);
+}
+
+.knob, .port {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: var(--cell);
+  height: var(--cell);
+  overflow: hidden;
+}
+.knob { cursor: ns-resize; touch-action: none; }
+.knob span, .port span {
+  flex: none;
+  width: calc(var(--cell) - 2px);
+  height: 12px;
+  font-size: 10px;
+  line-height: 12px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.knob span { font-family: "Roboto Mono", monospace; font-size: 9px; }
+.knob.active span { color: var(--f-high); text-transform: none; }
+
+.dial {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--f-low);
+  background: var(--panel-out);
+}
+.dial::after {
+  content: "";
+  position: absolute;
+  left: calc(50% - 1px);
+  top: 1px;
+  width: 2px;
+  height: 10px;
+  background: var(--f-high);
+}
+.knob:hover .dial { border-color: var(--f-med); }
+.knob.learn .dial { border-color: var(--accent); }
+.knob.mapped .dial { border-style: dashed; }
+
+/* on/off parameters: a square button with a lamp that lights when on */
+.knob.toggle { cursor: pointer; }
+.knob.toggle .dial { width: 22px; height: 22px; margin: 3px 0; border-radius: 3px; }
+.knob.toggle .dial::after {
+  left: 6px;
+  top: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--edge);
+}
+.knob.toggle.on .dial::after { background: var(--f-high); }
+/* the step a sequencer is on */
+.knob.current .dial { border-color: var(--f-high); box-shadow: 0 0 0 1px var(--f-high); }
+
+.inputs { margin-top: auto; }
+.outputs { background: var(--panel-out); box-shadow: inset 0 1px var(--edge); }
+
+.jack {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--f-med);
+  background: var(--background);
+  cursor: crosshair;
+  touch-action: none;
+}
+.jack:hover { border-color: var(--f-high); }
+.outputs .jack { background: var(--f-low); }

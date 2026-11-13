@@ -5,7 +5,8 @@ Panels like a real modular, flat monotone design, feedback patching as a first-c
 
 ## Decisions
 
-- Plain JS, ES modules, no framework, no build step. Static hosting.
+- Plain JS, ES modules, no framework, no build step. The frontend in `web/` runs
+  from any static host; a small Node service adds presets.
 - One `AudioWorkletProcessor` runs the whole patch, sample by sample.
 - Multichannel audio output.
 - MIDI input and output.
@@ -16,11 +17,51 @@ Panels like a real modular, flat monotone design, feedback patching as a first-c
 ## Layout
 
 ```
-index.html
-engine/    worklet processor, graph, ops
-modules/   one file per module, no DOM, imported by both UI and worklet
-ui/        rack, panels, knobs, cables, midi, patch files
+web/                frontend, static
+  index.html
+  engine/           worklet processor, graph, ops
+  modules/          one file per module, no DOM, imported by both UI and worklet
+  ui/               rack, panels, knobs, cables, midi, patch files, preset client
+  test/             hardware and budget test page
+server/             Node service, no dependencies
+  server.js         serves web/ and the preset API
+  presets.js        preset store, one JSON file per preset
+  test/             node --test
+data/presets/       stored presets (git-ignored)
 ```
+
+## Preset service
+
+- `GET /api/presets` lists `{name, updated}`, `GET|PUT|DELETE /api/presets/:name`
+  loads, stores (overwrites) or deletes the patch JSON.
+- Names: 1-64 letters of any script, digits, spaces and `- _ . ( ) + , ' & #`.
+  The file name is the URL-encoded name, so a name maps to exactly one file
+  inside the directory. Writes go to a temp file and are renamed into place.
+- Body limit 1 MB; a patch must be an object with a `modules` list.
+- Also serves `web/` with `cache-control: no-cache`, so edited modules are never
+  stale, and refuses paths outside `web/`.
+- Factory presets are read straight from `server/presets/`, never copied.
+  Storing under a factory name writes your version to the presets directory,
+  which wins; deleting it ("revert" in the UI) brings the factory one back. A
+  factory preset without a stored version cannot be deleted (403). The list
+  reports `factory` and `stored` per name.
+  `hardtekno` (175 bpm freetekno: distorted kick, rolling bass in the gaps,
+  offbeat hats, clap on 2 and 4, acid line through slew, drive and delay) and
+  `idm` (118 bpm, endless and glitchy: polymetric euclid tracks and sequences,
+  pattern density driven by a slow Lorenz attractor and a 90 s LFO, chance
+  gates on kick and snare, random steps throwing crush rate, grain pitch and
+  delay time around, quantized random blips in D minor) and `drones`
+  (ambient in D minor, no clock: a root voice of detuned saws and a sub, a
+  fifth, a voice that glides through D minor every 20 s from Lorenz into
+  sample & hold and quantizer, an FM shimmer, filtered noise wind and grains,
+  each swelling and opening on its own 0.004-0.05 Hz LFO, into a long delay
+  and a big reverb).
+- No authentication: it listens on 127.0.0.1 unless `HOST` is set.
+  `PORT` (default 8000) and `PRESETS_DIR` (default `data/presets`) configure it.
+- `GET /preset/:name` serves the app with `<base href="../">` so its relative
+  URLs resolve; the page reads the name from the path and loads the preset.
+- The frontend shows the preset controls only when the API answers, so static
+  hosting keeps working. Files can still be exported and imported.
 
 ## Engine
 
@@ -42,6 +83,7 @@ Panels are generated from this. There is no per-module UI code.
 // modules/vca.js
 export default {
   name: 'vca',
+  cols: 2,                     // width in grid cells
   inputs: { in: 0, cv: 10 },   // name: value when unpatched
   outputs: ['out'],
   params: { gain: { min: 0, max: 1, default: 1 } },
@@ -96,11 +138,50 @@ Cables carry one voice. No polyphony for now.
 
 ## UI
 
-- Rack on an HP-width grid, DOM panels, drag to move.
+- Menu bar (`web/ui/menubar.js`): file (new, import, export), presets (list,
+  click loads; name field with load/store/delete-or-revert), edit (undo, redo,
+  add module, duplicate, random, reset, remove for the selection), view
+  (zoom), audio (output device, device names), midi (enable, in/out ports).
+  Click a title to open, hover switches menus, arrows and esc work. Always
+  visible: + module, start/stop audio, record, the loaded preset's name, and
+  zoom, channels, cpu and clip lamps on the right.
+- Shortcuts: ctrl+z / ctrl+shift+z / ctrl+y, ctrl+d duplicate, ctrl+s store
+  the named preset (or export without the service), del, shift+a, + - 0.
+
+- The rack fills the window below the toolbar and shows a grid of 48 px cells.
+  Every module is 8 cells tall; its width in cells is its number of knob and
+  jack columns (`cols` in the definition). Modules snap to the grid in rows
+  8 cells high. There are always enough rows to fill the view plus one free row.
+- Dragging a module by its title pushes the row's other modules aside, so
+  modules can be reordered; leaving a row lets it spring back, Escape cancels.
+- Zoom 25-200 %: ctrl+wheel or pinch at the pointer, `+ - 0`, view menu.
+  The rack is scaled with a CSS transform inside a sizer that gives the scroll
+  area; zoom is stored per browser, not in the patch.
+- Pan by dragging empty rack space, or middle-drag anywhere.
+- Hovering a jack draws its cables on top, each in its own colour (red, amber, cyan, green, violet, pink) with a dark halo. Hovering a cable itself lights it red.
+- On/off parameters (min 0, max 1, step 1) are square buttons with a lamp (light grey when on): click, space or enter flips them.
+- Undo/redo (ctrl+z, ctrl+shift+z or ctrl+y, edit menu): patch
+  snapshots, recorded 400 ms after things settle, so a knob drag is one step.
+  Undo applies the snapshot by diff (`rack.apply`), so modules that stay keep
+  their engine state. Loading a preset or "new" is one undoable step.
+- Click a cable to select it (lit red), also where it crosses a panel; delete
+  removes it, esc deselects. Right-click a cable for its menu. Knobs, jacks,
+  buttons and title bars take clicks before cables.
+- Bypass button on drive, fold, crush, vcf, delay, reverb, granular (`bypass: {output: input}` in the module definition adds it). The engine fades over 5 ms and skips process() while bypassed. Random leaves bypass alone.
+- Right-click a module: random (every parameter through its normalised range,
+  so curves and steps hold), reset, duplicate (placed right of it), remove.
+  Right-click a knob is midi learn, right-click empty space the add menu.
+- Warnings are a stack at the top right below the toolbar; click or 8 s closes.
+- Audio is started and stopped with one button; starting replays the patch.
+- shift+a opens the module menu at the pointer (type to filter, Enter adds) and
+  the module goes into the cell under the pointer. The toolbar has a button too.
 - Cables on one canvas overlay above the panels. Every cable changes on every
   frame, so one redraw is simpler and cheaper than updating SVG. Cables are
   picked up by their ports, so no hit testing on the curves.
-- Patches as JSON, in the URL hash and as files.
+- Patches as JSON: presets on the service, export and import as files. The
+  patch is not kept in the URL; `/preset/<name>` loads a preset, and loading or
+  storing one shows that link in the address bar. A reload of `/` starts with
+  the default patch.
 
 ### Cable animation
 
@@ -136,8 +217,23 @@ Idea: reuse the drifting turbulence lines from the velak homepage on empty rack 
 
 ## Status
 
-Prototype built: all steps below exist. Run with
-`python -m http.server -b 127.0.0.1 8000 -d .` and open <http://localhost:8000/>.
+Prototype built: all steps below exist. Run with `node server/server.js`
+(or `npm start` in `server/`) and open <http://localhost:8000/>.
+Tests: `npm test` in `server/`.
+
+## Modules
+
+35 modules. Sources: vco, lfo, noise, chaos. Timing: clock (bpm, swing),
+seq (8 steps), steps (16 on/off trigger steps, current step outlined), euclid (4 Euclidean tracks, hit count CV), chance (Bernoulli
+gate), env. Drums: kick, hat, clap. Shaping: vcf, vca, mixer, matrix, fold,
+drive, crush, slew, sample hold, quant (scales). Effects:
+delay, reverb, granular. Utility: atten, scope. I/O: input, output, 6 midi.
+Shared DSP helpers (SVF, noise, one-pole) in `web/modules/lib/dsp.js`.
+
+Still missing for a full system: random/turing source, clock
+divider and logic, comparator, crossfader, sidechain ducker/compressor,
+sampler. Features: copy/paste of several modules, typing knob values,
+tempo-synced delay, oversampling for the distortions, polyphony, scenes.
 
 ## Build order
 
@@ -148,7 +244,7 @@ Prototype built: all steps below exist. Run with
 2. **Engine and first modules:** vco (polyBLEP), vcf (SVF), vca, env, lfo, noise,
    mixer, delay, scope, output.
 3. **Rack UI:** panels, knobs, dragging, cables with animation.
-4. **Patches:** JSON in the URL hash and as files.
+4. **Patches:** JSON presets on the service and as files.
 5. **MIDI modules** and MIDI learn.
 6. **velak layer:** audio input, wavefolder, sample & hold, chaos oscillator,
    feedback matrix, granular, recording.

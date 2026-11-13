@@ -1,0 +1,11 @@
+{
+  "name": "aparat-server",
+  "private": true,
+  "type": "module",
+  "description": "Serves the aparat frontend and stores presets",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  }
+}

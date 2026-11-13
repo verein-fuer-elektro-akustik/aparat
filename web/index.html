@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aparat</title>
+<link rel="stylesheet" href="ui/style.css">
+</head>
+<body>
+<header>
+  <h1>aparat</h1>
+  <nav id="menubar" aria-label="main menu">
+    <div class="menu" data-menu="file">
+      <button class="menu-title" aria-haspopup="menu" aria-expanded="false">file</button>
+      <div class="menu-items" role="menu" hidden>
+        <button id="new" role="menuitem">new patch</button>
+        <button id="load" role="menuitem" title="open a patch json file">import…</button>
+        <button id="save" role="menuitem" title="download the patch as a json file">export</button>
+        <input id="file" type="file" accept=".json,application/json" hidden>
+      </div>
+    </div>
+    <div class="menu" data-menu="presets" id="presets" hidden>
+      <button class="menu-title" aria-haspopup="menu" aria-expanded="false">presets</button>
+      <div class="menu-items" role="menu" hidden>
+        <div id="presetItems"></div>
+        <hr>
+        <div class="menu-row">
+          <input id="presetName" list="presetList" placeholder="preset name" aria-label="preset name" autocomplete="off" spellcheck="false" maxlength="64">
+          <datalist id="presetList"></datalist>
+        </div>
+        <div class="menu-row">
+          <button id="presetLoad">load</button>
+          <button id="presetStore" title="store the patch on the server under this name (ctrl+s)">store</button>
+          <button id="presetDelete" data-keep>delete</button>
+        </div>
+      </div>
+    </div>
+    <div class="menu" data-menu="edit">
+      <button class="menu-title" aria-haspopup="menu" aria-expanded="false">edit</button>
+      <div class="menu-items" role="menu" hidden>
+        <button id="undo" role="menuitem" disabled>undo <kbd>ctrl+z</kbd></button>
+        <button id="redo" role="menuitem" disabled>redo <kbd>ctrl+shift+z</kbd></button>
+        <hr>
+        <button id="editAdd" role="menuitem">add module… <kbd>shift+a</kbd></button>
+        <button id="editDuplicate" role="menuitem">duplicate <kbd>ctrl+d</kbd></button>
+        <button id="editRandom" role="menuitem">random</button>
+        <button id="editReset" role="menuitem">reset</button>
+        <button id="editRemove" role="menuitem">remove <kbd>del</kbd></button>
+      </div>
+    </div>
+    <div class="menu" data-menu="view">
+      <button class="menu-title" aria-haspopup="menu" aria-expanded="false">view</button>
+      <div class="menu-items" role="menu" hidden>
+        <button id="zoomIn" role="menuitem" data-keep>zoom in <kbd>+</kbd></button>
+        <button id="zoomOut" role="menuitem" data-keep>zoom out <kbd>−</kbd></button>
+        <button id="zoomReset" role="menuitem">actual size <kbd>0</kbd></button>
+      </div>
+    </div>
+    <div class="menu" data-menu="audio">
+      <button class="menu-title" aria-haspopup="menu" aria-expanded="false">audio</button>
+      <div class="menu-items" role="menu" hidden>
+        <label class="menu-row">output <select id="device" aria-label="output device"><option value="">system default</option></select></label>
+        <button id="devices" role="menuitem" data-keep title="asks for microphone permission, needed to show device names">show device names</button>
+      </div>
+    </div>
+    <div class="menu" data-menu="midi">
+      <button class="menu-title" aria-haspopup="menu" aria-expanded="false">midi</button>
+      <div class="menu-items" role="menu" hidden>
+        <button id="midi" role="menuitem" data-keep>enable midi</button>
+        <div id="midiPorts" hidden>
+          <label class="menu-row">in <select id="midiIn" aria-label="midi input"></select></label>
+          <label class="menu-row">out <select id="midiOut" aria-label="midi output"></select></label>
+        </div>
+      </div>
+    </div>
+  </nav>
+  <span class="group">
+    <button id="add" title="shift+a">+ module</button>
+    <button id="start">start audio</button>
+    <button id="record">record</button>
+  </span>
+  <span id="presetCurrent" title="loaded preset"></span>
+  <span class="status">
+    <span id="zoomLevel" title="zoom"></span>
+    <span id="channels">off</span>
+    <span id="cpu"></span>
+    <span id="clip" aria-label="clipping per output channel"></span>
+  </span>
+</header>
+<div id="error" role="alert"></div>
+<div id="stage">
+  <div id="rack"><div id="sizer"><div id="content"></div></div></div>
+  <canvas id="cables"></canvas>
+</div>
+<div id="ctx" role="menu" aria-labelledby="ctxTitle" hidden>
+  <div id="ctxTitle"></div>
+  <div id="ctxItems"></div>
+</div>
+<div id="menu" role="dialog" aria-label="add module" hidden>
+  <input id="search" placeholder="add module" aria-label="search modules" autocomplete="off" spellcheck="false">
+  <div id="library"></div>
+  <ul class="hints">
+    <li>shift+a opens this menu at the pointer</li>
+    <li>drag a module by its title, neighbours make room, esc cancels</li>
+    <li>drag jacks to patch, pull a cable off an input to move or remove it</li>
+    <li>ctrl-drag an input for another cable</li>
+    <li>double-click a knob to reset, right-click it for midi learn</li>
+    <li>right-click a module: random, reset, duplicate, remove</li>
+    <li>right-click empty space opens this menu</li>
+    <li>delete removes the selected module</li>
+    <li>drag empty space or middle-drag to move the view</li>
+    <li>ctrl+wheel, pinch or + − 0 zoom the rack</li>
+  </ul>
+</div>
+<script type="module" src="ui/main.js"></script>
+</body>
+</html>
