@@ -756,11 +756,16 @@ export class Rack {
     e.preventDefault();
     e.stopPropagation();
     this.select(m);
+    // Both ends work alike: dragging a jack that has cables picks up the
+    // latest one, to move it to another jack or drop it to remove it. Ctrl
+    // starts a new cable instead (an output feeds any number of inputs, an
+    // input sums its cables).
     let fixed = { dir, ref: { m, i } };
-    if (dir === 'in' && !e.ctrlKey) {
-      const existing = this.cables.list.filter((c) => c.to.m === m && c.to.i === i).pop();
+    if (!e.ctrlKey && !e.metaKey) {
+      const end = dir === 'in' ? 'to' : 'from';
+      const existing = this.cables.list.filter((c) => c[end].m === m && c[end].i === i).pop();
       if (existing) {
-        fixed = { dir: 'out', ref: existing.from };
+        fixed = dir === 'in' ? { dir: 'out', ref: existing.from } : { dir: 'in', ref: existing.to };
         this.disconnect(existing);
       }
     }
