@@ -8,6 +8,7 @@ const CELL = 48;
 const CELLS = 8;
 const ROW = CELL * CELLS;
 const EDGE = 40;
+const CABLE_MARGIN = 8; // room for the cable stroke at the edge of the rack
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 2;
 
@@ -148,6 +149,7 @@ export class Rack {
     this.cables.add(cable);
     this.layoutCable(cable);
     this.sendConnect(cable);
+    this.updateExtent();
     this.onChange();
     return cable;
   }
@@ -156,6 +158,7 @@ export class Rack {
     this.cables.remove(cable);
     this.freeSlots.push(cable.slot);
     this.send({ op: 'disconnect', slot: cable.slot });
+    this.updateExtent();
     this.onChange();
   }
 
@@ -605,25 +608,47 @@ export class Rack {
     this.scroller.scrollTop += step(r.bottom - e.clientY) - step(e.clientY - r.top);
   }
 
-  updateExtent() {
-    let cols = 0;
-    let used = -1;
+  // The scroll area is the space the modules and the cables hanging between
+  // them take, at least the view, so there are scrollbars only when the patch
+  // reaches beyond the view. While
+  // dragging, `ahead` ({right, bottom} in rack pixels) grows it in front of the
+  // dragged module, so it can be pushed further out (with auto-scroll).
+  updateExtent(ahead = null) {
+    let right = 0;
+    let bottom = 0;
     for (const m of this.modules.values()) {
-      cols = Math.max(cols, m.x + m.def.cols);
-      used = Math.max(used, m.row);
+      right = Math.max(right, (m.x + m.def.cols) * CELL);
+      bottom = Math.max(bottom, (m.row + 1) * ROW);
     }
-    // A view's worth of free space right of and below the modules, so there is
-    // always room to place things and to zoom around the pointer.
-    const z = this.zoom;
-    const viewW = this.scroller.clientWidth / z;
-    const viewH = this.scroller.clientHeight / z;
-    this.rows = used + 1 + Math.max(1, Math.ceil(viewH / ROW));
-    const width = Math.ceil(cols * CELL + viewW);
-    this.content.style.width = `${width}px`;
-    this.content.style.height = `${this.rows * ROW}px`;
-    // the transform does not change layout size, the sizer gives the scroll area
-    this.sizer.style.width = `${Math.ceil(width * z)}px`;
-    this.sizer.style.height = `${Math.ceil(this.rows * ROW * z)}px`;
+    // cables sag below the jacks they connect, also below the last row
+    for (const c of this.cables.list) {
+      const pts = c.pts;
+      for (let k = 0; k < pts.length; k += 2) {
+        right = Math.max(right, Math.ceil(pts[k] + CABLE_MARGIN));
+        bottom = Math.max(bottom, Math.ceil(pts[k + 1] + CABLE_MARGIN));
+      }
+    }
+    if (ahead) {
+      right = Math.max(right, ahead.right);
+      bottom = Math.max(bottom, ahead.bottom);
+    }
+    const apply = () => {
+      const z = this.zoom;
+      const width = Math.max(right, Math.floor(this.scroller.clientWidth / z));
+      const height = Math.max(bottom, Math.floor(this.scroller.clientHeight / z));
+      // rows a module can be dropped into, including a partly visible last one
+      this.rows = Math.max(1, Math.ceil(height / ROW));
+      this.content.style.width = `${width}px`;
+      this.content.style.height = `${height}px`;
+      // the transform does not change layout size, the sizer gives the scroll area
+      this.sizer.style.width = `${Math.round(width * z)}px`;
+      this.sizer.style.height = `${Math.round(height * z)}px`;
+    };
+    // a scrollbar appearing or going away changes the view size, so once more
+    const w = this.scroller.clientWidth;
+    const h = this.scroller.clientHeight;
+    apply();
+    if (this.scroller.clientWidth !== w || this.scroller.clientHeight !== h) apply();
   }
 
   jackPos(ref, dir) {
@@ -691,9 +716,10 @@ export class Rack {
       const row = Math.min(this.rows - 1, Math.max(0, Math.round(top / ROW)));
       this.arrange(m, Math.round(left / CELL), row, snap);
       this.setPixels(m, left, top);
+      this.relayoutCables();
+      this.updateExtent({ right: left + (m.def.cols + 2) * CELL, bottom: top + 2 * ROW });
       this.drop.style.left = `${m.x * CELL}px`;
       this.drop.style.top = `${m.row * ROW}px`;
-      this.relayoutCables();
     };
     const end = (cancel) => {
       window.removeEventListener('pointermove', move);
