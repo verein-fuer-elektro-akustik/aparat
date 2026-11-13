@@ -10,28 +10,27 @@
 <header>
   <h1>aparat</h1>
   <nav id="menubar" aria-label="main menu">
-    <div class="menu" data-menu="file">
-      <button class="menu-title" aria-haspopup="menu" aria-expanded="false">file</button>
+    <div class="menu" data-menu="patch">
+      <button class="menu-title" aria-haspopup="menu" aria-expanded="false">patch</button>
       <div class="menu-items" role="menu" hidden>
         <button id="new" role="menuitem">new patch</button>
         <button id="load" role="menuitem" title="open a patch json file">import…</button>
         <button id="save" role="menuitem" title="download the patch as a json file">export</button>
         <input id="file" type="file" accept=".json,application/json" hidden>
-      </div>
-    </div>
-    <div class="menu" data-menu="presets" id="presets" hidden>
-      <button class="menu-title" aria-haspopup="menu" aria-expanded="false">presets</button>
-      <div class="menu-items" role="menu" hidden>
-        <div id="presetItems"></div>
-        <hr>
-        <div class="menu-row">
-          <input id="presetName" list="presetList" placeholder="preset name" aria-label="preset name" autocomplete="off" spellcheck="false" maxlength="64">
-          <datalist id="presetList"></datalist>
-        </div>
-        <div class="menu-row">
-          <button id="presetLoad">load</button>
-          <button id="presetStore" title="store the patch on the server under this name (ctrl+s)">store</button>
-          <button id="presetDelete" data-keep>delete</button>
+        <!-- patches stored on the server, shown when the patch service answers -->
+        <div id="patches" hidden>
+          <hr>
+          <div id="patchItems"></div>
+          <hr>
+          <div class="menu-row">
+            <input id="patchName" list="patchList" placeholder="patch name" aria-label="patch name" autocomplete="off" spellcheck="false" maxlength="64">
+            <datalist id="patchList"></datalist>
+          </div>
+          <div class="menu-row">
+            <button id="patchLoad">load</button>
+            <button id="patchStore" title="store the patch on the server under this name (ctrl+s)">store</button>
+            <button id="patchDelete" data-keep>delete</button>
+          </div>
         </div>
       </div>
     </div>
@@ -79,7 +78,7 @@
     <button id="start">start audio</button>
     <button id="record">record</button>
   </span>
-  <span id="presetCurrent" title="loaded preset"></span>
+  <span id="patchCurrent" title="loaded patch"></span>
   <span class="status">
     <span id="zoomLevel" title="zoom"></span>
     <span id="channels">off</span>

@@ -32,7 +32,7 @@ export class AudioEngine {
     if (sinkId) options.sinkId = sinkId;
     const ctx = new AudioContext(options);
     try {
-      // relative to this file, not to the page, whose url changes with presets
+      // relative to this file, not to the page, whose url changes with patches
       await ctx.audioWorklet.addModule(new URL('../engine/processor.js', import.meta.url));
       await Promise.race([
         ctx.resume(),

@@ -2,7 +2,7 @@
   "name": "aparat-server",
   "private": true,
   "type": "module",
-  "description": "aparat API: stores presets (nginx serves the frontend)",
+  "description": "aparat API: stores patches (nginx serves the frontend)",
   "engines": { "node": ">=18" },
   "scripts": {
     "start": "node server.js",

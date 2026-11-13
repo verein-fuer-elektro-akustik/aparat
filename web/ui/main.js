@@ -4,7 +4,7 @@ import { CableLayer } from './cables.js';
 import { defaultPatch } from './default-patch.js';
 import { menubar } from './menubar.js';
 import { Midi } from './midi.js';
-import { presets } from './presets.js';
+import { patches } from './patches.js';
 import { Rack, ZOOM_MAX, ZOOM_MIN } from './rack.js';
 import { encodeWav } from './wav.js';
 
@@ -193,8 +193,8 @@ ctx.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // patches
 //
-// The patch is not kept in the url. The url only names a preset:
-// <app>/preset/<name> loads that preset from the service. nginx serves the page
+// The rack's patch is not kept in the url, only the name of a stored one:
+// <app>/patch/<name> loads that patch from the service. nginx serves the page
 // there with <base href="../">, so relative urls keep working.
 
 const appRoot = new URL('.', document.baseURI);
@@ -222,9 +222,9 @@ function usesInput() {
   return [...rack.modules.values()].some((m) => m.type === 'input');
 }
 
-function presetFromPath() {
+function patchFromPath() {
   if (!location.pathname.startsWith(appRoot.pathname)) return null;
-  const match = /^preset\/([^/]+)$/.exec(location.pathname.slice(appRoot.pathname.length));
+  const match = /^patch\/([^/]+)$/.exec(location.pathname.slice(appRoot.pathname.length));
   try {
     return match ? decodeURIComponent(match[1]) : null;
   } catch {
@@ -232,16 +232,16 @@ function presetFromPath() {
   }
 }
 
-// The preset the rack shows, or null for none: as a link that can be shared
+// The patch the rack shows, or null for none: as a link that can be shared
 // (or the plain app url), in the header and the menu, and in the name field,
-// so storing (also ctrl+s) never writes over a preset the rack no longer shows.
-function showPresetInUrl(name) {
-  const url = name ? new URL(`preset/${encodeURIComponent(name)}`, appRoot) : appRoot;
+// so storing (also ctrl+s) never writes over a patch the rack no longer shows.
+function showPatchInUrl(name) {
+  const url = name ? new URL(`patch/${encodeURIComponent(name)}`, appRoot) : appRoot;
   if (url.href !== location.href) history.replaceState(null, '', url);
-  $('presetCurrent').textContent = name ?? '';
-  $('presetName').value = name ?? '';
-  markCurrentPreset();
-  updatePresetButtons();
+  $('patchCurrent').textContent = name ?? '';
+  $('patchName').value = name ?? '';
+  markCurrentPatch();
+  updatePatchButtons();
 }
 
 // engine messages
@@ -482,7 +482,7 @@ $('midi').addEventListener('click', guarded(async () => {
 }));
 $('new').addEventListener('click', () => {
   loadPatch({ modules: [], cables: [] });
-  showPresetInUrl(null);
+  showPatchInUrl(null);
 });
 $('save').addEventListener('click', () => {
   download(new Blob([JSON.stringify(currentPatch(), null, 2)], { type: 'application/json' }), `aparat-${stamp()}.json`);
@@ -493,39 +493,39 @@ $('file').addEventListener('change', guarded(async (e) => {
   e.target.value = '';
   if (!file) return;
   loadPatch(JSON.parse(await file.text()));
-  showPresetInUrl(null);
+  showPatchInUrl(null);
 }));
 $('record').addEventListener('click', guarded(toggleRecording));
 
-// presets on the server, only shown when the service is there
+// patches on the server, only shown when the service is there
 
-// Factory presets come with aparat. Storing over one keeps your version, and
-// deleting that ("revert") brings the factory preset back.
-let presetList = [];
-const presetInfo = (name) => presetList.find((p) => p.name === name);
+// Factory patches come with aparat. Storing over one keeps your version, and
+// deleting that ("revert") brings the factory patch back.
+let patchList = [];
+const patchInfo = (name) => patchList.find((p) => p.name === name);
 
 function deleteLabel() {
-  return presetInfo($('presetName').value.trim())?.factory ? 'revert' : 'delete';
+  return patchInfo($('patchName').value.trim())?.factory ? 'revert' : 'delete';
 }
 
-function updatePresetButtons() {
-  const name = $('presetName').value.trim();
-  const info = presetInfo(name);
-  $('presetLoad').disabled = !info;
-  $('presetDelete').disabled = !info || (info.factory && !info.stored);
-  $('presetDelete').title = info?.factory
-    ? info.stored ? 'delete your version and go back to the factory preset' : 'factory presets cannot be deleted'
+function updatePatchButtons() {
+  const name = $('patchName').value.trim();
+  const info = patchInfo(name);
+  $('patchLoad').disabled = !info;
+  $('patchDelete').disabled = !info || (info.factory && !info.stored);
+  $('patchDelete').title = info?.factory
+    ? info.stored ? 'delete your version and go back to the factory patch' : 'factory patches cannot be deleted'
     : '';
-  $('presetStore').disabled = !name;
-  $('presetStore').textContent = info ? 'overwrite' : 'store';
+  $('patchStore').disabled = !name;
+  $('patchStore').textContent = info ? 'overwrite' : 'store';
   disarmDelete();
 }
 
-async function refreshPresets() {
-  presetList = await presets.list();
-  $('presetList').replaceChildren(...presetList.map((p) => new Option(p.factory ? `${p.name} (factory)` : p.name, p.name)));
-  // the presets menu lists them all, a click loads one
-  $('presetItems').replaceChildren(...presetList.map((p) => {
+async function refreshPatches() {
+  patchList = await patches.list();
+  $('patchList').replaceChildren(...patchList.map((p) => new Option(p.factory ? `${p.name} (factory)` : p.name, p.name)));
+  // the patches menu lists them all, a click loads one
+  $('patchItems').replaceChildren(...patchList.map((p) => {
     const b = document.createElement('button');
     b.setAttribute('role', 'menuitem');
     b.dataset.name = p.name;
@@ -536,57 +536,57 @@ async function refreshPresets() {
       b.append(tag);
     }
     b.addEventListener('click', () => {
-      $('presetName').value = p.name;
-      updatePresetButtons();
-      loadPreset();
+      $('patchName').value = p.name;
+      updatePatchButtons();
+      loadNamedPatch();
     });
     return b;
   }));
-  if (!presetList.length) $('presetItems').textContent = 'no presets stored yet';
-  markCurrentPreset();
-  updatePresetButtons();
+  if (!patchList.length) $('patchItems').textContent = 'no patches stored yet';
+  markCurrentPatch();
+  updatePatchButtons();
 }
 
-function markCurrentPreset() {
-  const current = presetFromPath();
-  for (const b of $('presetItems').querySelectorAll('button')) b.classList.toggle('current', b.dataset.name === current);
+function markCurrentPatch() {
+  const current = patchFromPath();
+  for (const b of $('patchItems').querySelectorAll('button')) b.classList.toggle('current', b.dataset.name === current);
 }
 
 function flash(button, text) {
   button.textContent = text;
   setTimeout(() => {
-    if (button.textContent === text) updatePresetButtons();
+    if (button.textContent === text) updatePatchButtons();
   }, 1200);
 }
 
 let deleteTimer = 0;
 function disarmDelete() {
   clearTimeout(deleteTimer);
-  $('presetDelete').classList.remove('confirm');
-  $('presetDelete').textContent = deleteLabel();
+  $('patchDelete').classList.remove('confirm');
+  $('patchDelete').textContent = deleteLabel();
 }
 
-const loadPreset = guarded(async () => {
-  const name = $('presetName').value.trim();
-  loadPatch(await presets.load(name));
-  showPresetInUrl(name);
-  flash($('presetLoad'), 'loaded');
+const loadNamedPatch = guarded(async () => {
+  const name = $('patchName').value.trim();
+  loadPatch(await patches.load(name));
+  showPatchInUrl(name);
+  flash($('patchLoad'), 'loaded');
 });
 
-$('presetName').addEventListener('input', updatePresetButtons);
-$('presetName').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !$('presetLoad').disabled) loadPreset();
+$('patchName').addEventListener('input', updatePatchButtons);
+$('patchName').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !$('patchLoad').disabled) loadNamedPatch();
 });
-$('presetLoad').addEventListener('click', loadPreset);
-$('presetStore').addEventListener('click', guarded(async () => {
-  const name = $('presetName').value.trim();
-  await presets.store(name, currentPatch());
-  showPresetInUrl(name);
-  await refreshPresets();
-  flash($('presetStore'), 'stored');
+$('patchLoad').addEventListener('click', loadNamedPatch);
+$('patchStore').addEventListener('click', guarded(async () => {
+  const name = $('patchName').value.trim();
+  await patches.store(name, currentPatch());
+  showPatchInUrl(name);
+  await refreshPatches();
+  flash($('patchStore'), 'stored');
 }));
-$('presetDelete').addEventListener('click', guarded(async () => {
-  const button = $('presetDelete');
+$('patchDelete').addEventListener('click', guarded(async () => {
+  const button = $('patchDelete');
   if (!button.classList.contains('confirm')) {
     button.classList.add('confirm');
     button.textContent = 'sure?';
@@ -594,25 +594,25 @@ $('presetDelete').addEventListener('click', guarded(async () => {
     return;
   }
   disarmDelete();
-  const name = $('presetName').value.trim();
-  const factory = presetInfo(name)?.factory;
-  await presets.remove(name);
-  await refreshPresets();
+  const name = $('patchName').value.trim();
+  const factory = patchInfo(name)?.factory;
+  await patches.remove(name);
+  await refreshPatches();
   if (factory) {
     // reverted: show the factory version
-    loadPatch(await presets.load(name));
-    showPresetInUrl(name);
+    loadPatch(await patches.load(name));
+    showPatchInUrl(name);
     flash(button, 'reverted');
     return;
   }
-  if (presetFromPath() === name) showPresetInUrl(null);
+  if (patchFromPath() === name) showPatchInUrl(null);
   flash(button, 'deleted');
 }));
 
-presets.available().then(async (ok) => {
+patches.available().then(async (ok) => {
   if (!ok) return;
-  $('presets').hidden = false;
-  await refreshPresets().catch(showError);
+  $('patches').hidden = false;
+  await refreshPatches().catch(showError);
 });
 
 // zoom, remembered per browser, not part of the patch
@@ -673,9 +673,9 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if ((e.ctrlKey || e.metaKey) && !e.altKey && e.code === 'KeyS') {
-    // store the preset when it has a name, otherwise export a file
+    // store the patch when it has a name, otherwise export a file
     e.preventDefault();
-    if (!$('presets').hidden && !$('presetStore').disabled) $('presetStore').click();
+    if (!$('patches').hidden && !$('patchStore').disabled) $('patchStore').click();
     else $('save').click();
     return;
   }
@@ -699,19 +699,19 @@ window.addEventListener('keydown', (e) => {
   if ((e.key === 'Delete' || e.key === 'Backspace') && menu.hidden) removeSelection();
 });
 
-const startPreset = presetFromPath();
-if (startPreset) {
+const startPatch = patchFromPath();
+if (startPatch) {
   try {
-    loadPatch(await presets.load(startPreset));
-    showPresetInUrl(startPreset);
+    loadPatch(await patches.load(startPatch));
+    showPatchInUrl(startPatch);
   } catch (err) {
-    showError(`could not load preset "${startPreset}": ${err.message.replace(/^preset: /, '')}`);
+    showError(`could not load patch "${startPatch}": ${err.message.replace(/^patch: /, '')}`);
     loadPatch(defaultPatch);
-    showPresetInUrl(null);
+    showPatchInUrl(null);
   }
 } else {
   loadPatch(defaultPatch);
-  showPresetInUrl(null);
+  showPatchInUrl(null);
 }
 let savedZoom = 1;
 try {

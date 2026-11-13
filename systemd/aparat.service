@@ -1,4 +1,4 @@
-# aparat preset API as a systemd user service.
+# aparat patch API as a systemd user service.
 #
 # deploy.sh fills in @APP_DIR@ and @NODE@ and installs this as
 # ~/.config/systemd/user/aparat.service. By hand:
@@ -10,10 +10,10 @@
 #   sudo loginctl enable-linger $USER     # once: run without a login, start at boot
 #
 # Logs: journalctl --user -u aparat -f
-# HOST, PORT and PRESETS_DIR come from @APP_DIR@/.env, written from deploy.env.
+# HOST, PORT and PATCHES_DIR come from @APP_DIR@/.env, written from deploy.env.
 
 [Unit]
-Description=aparat preset API
+Description=aparat patch API
 Documentation=https://velak.klingt.org/aparat/
 After=network.target
 

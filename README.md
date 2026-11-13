@@ -7,7 +7,7 @@ A modular synthesizer in the browser.
 Needs node 18+ and nginx. From the repository root, in two terminals:
 
 ```sh
-# preset API on 127.0.0.1:8001, stored presets go to data/presets/
+# patch API on 127.0.0.1:8001, stored patches go to data/patches/
 node server/server.js
 
 # nginx serves web/ and forwards /aparat/api/ to the API

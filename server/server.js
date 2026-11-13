@@ -1,10 +1,10 @@
-// aparat API: stores presets. The frontend in web/ is static and served by
+// aparat API: stores patches. The frontend in web/ is static and served by
 // nginx, which proxies /api/ here (see nginx/).
 //
-//   GET    /api/presets          [{ name, updated, factory, stored }]
-//   GET    /api/presets/:name    the patch
-//   PUT    /api/presets/:name    store the patch in the request body
-//   DELETE /api/presets/:name    the stored version (factory presets stay)
+//   GET    /api/patches          [{ name, updated, factory, stored }]
+//   GET    /api/patches/:name    the patch
+//   PUT    /api/patches/:name    store the patch in the request body
+//   DELETE /api/patches/:name    the stored version (factory patches stay)
 //
 // No dependencies. No authentication, so it listens on 127.0.0.1 unless HOST
 // says otherwise.
@@ -12,10 +12,10 @@
 import { createServer } from 'node:http';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MAX_BYTES, PresetError, PresetStore } from './presets.js';
+import { MAX_BYTES, PatchError, PatchStore } from './patches.js';
 
-// Factory presets ship next to this file. Stored presets default to data/presets
-// in the repository; deployed, PRESETS_DIR says where they go.
+// Factory patches ship next to this file. Stored patches default to data/patches
+// in the repository; deployed, PATCHES_DIR says where they go.
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
@@ -24,7 +24,7 @@ function send(res, status, body, type = 'application/json; charset=utf-8') {
   res.end(data);
 }
 
-const tooLarge = () => new PresetError(413, `presets are limited to ${MAX_BYTES} bytes`);
+const tooLarge = () => new PatchError(413, `patches are limited to ${MAX_BYTES} bytes`);
 
 // Bodies without a content-length (chunked) are counted as they arrive. Past
 // the limit the rest is read and dropped, so the 413 reaches the client
@@ -51,7 +51,7 @@ async function api(req, res, store, path) {
   try {
     name = decodeURIComponent(path);
   } catch {
-    throw new PresetError(400, 'bad preset name');
+    throw new PatchError(400, 'bad patch name');
   }
   switch (req.method) {
     case 'GET':
@@ -66,8 +66,8 @@ async function api(req, res, store, path) {
       try {
         patch = JSON.parse(await readBody(req));
       } catch (err) {
-        if (err instanceof PresetError) throw err;
-        throw new PresetError(400, 'body is not json');
+        if (err instanceof PatchError) throw err;
+        throw new PatchError(400, 'body is not json');
       }
       return send(res, 200, await store.put(name, patch));
     }
@@ -81,22 +81,22 @@ async function api(req, res, store, path) {
 }
 
 export function createService({
-  presetsDir = join(HERE, '..', 'data', 'presets'),
-  factoryDir = join(HERE, 'presets'),
+  patchesDir = join(HERE, '..', 'data', 'patches'),
+  factoryDir = join(HERE, 'patches'),
 } = {}) {
-  const store = new PresetStore(resolve(presetsDir), factoryDir ? resolve(factoryDir) : null);
+  const store = new PatchStore(resolve(patchesDir), factoryDir ? resolve(factoryDir) : null);
   return createServer(async (req, res) => {
     res.setHeader('x-content-type-options', 'nosniff');
     const { pathname } = new URL(req.url, 'http://localhost');
     try {
-      if (pathname === '/api/presets' || pathname.startsWith('/api/presets/')) {
-        await api(req, res, store, pathname.slice('/api/presets/'.length));
+      if (pathname === '/api/patches' || pathname.startsWith('/api/patches/')) {
+        await api(req, res, store, pathname.slice('/api/patches/'.length));
       } else {
         send(res, 404, { error: 'not found' });
       }
     } catch (err) {
       if (res.headersSent) return res.destroy();
-      if (err instanceof PresetError) return send(res, err.status, { error: err.message });
+      if (err instanceof PatchError) return send(res, err.status, { error: err.message });
       console.error(err);
       send(res, 500, { error: 'internal error' });
     }
@@ -107,8 +107,8 @@ export function createService({
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const host = process.env.HOST ?? '127.0.0.1';
   const port = Number(process.env.PORT ?? 8001);
-  const presetsDir = process.env.PRESETS_DIR;
-  createService(presetsDir ? { presetsDir } : {}).listen(port, host, () => {
+  const patchesDir = process.env.PATCHES_DIR;
+  createService(patchesDir ? { patchesDir } : {}).listen(port, host, () => {
     console.log(`aparat api on http://${host}:${port}/api/`);
   });
 }

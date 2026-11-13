@@ -8,22 +8,22 @@ import { createService } from '../server.js';
 
 let server;
 let base;
-let presetsDir;
+let patchesDir;
 
 before(async () => {
-  presetsDir = await mkdtemp(join(tmpdir(), 'aparat-presets-'));
-  server = createService({ presetsDir, factoryDir: null });
+  patchesDir = await mkdtemp(join(tmpdir(), 'aparat-patches-'));
+  server = createService({ patchesDir, factoryDir: null });
   await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
   base = `http://127.0.0.1:${server.address().port}`;
 });
 
 after(async () => {
   server.close();
-  await rm(presetsDir, { recursive: true, force: true });
+  await rm(patchesDir, { recursive: true, force: true });
 });
 
 const patch = { v: 2, modules: [{ id: 1, type: 'vco', x: 0, row: 0 }], cables: [] };
-const url = (name) => `${base}/api/presets/${encodeURIComponent(name)}`;
+const url = (name) => `${base}/api/patches/${encodeURIComponent(name)}`;
 const put = (name, body) =>
   fetch(url(name), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: typeof body === 'string' ? body : JSON.stringify(body) });
 
@@ -40,13 +40,13 @@ function raw(path) {
   });
 }
 
-test('starts with no presets', async () => {
-  const res = await fetch(`${base}/api/presets`);
+test('starts with no patches', async () => {
+  const res = await fetch(`${base}/api/patches`);
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), []);
 });
 
-test('stores, lists, loads and overwrites a preset', async () => {
+test('stores, lists, loads and overwrites a patch', async () => {
   let res = await put('drone 1', patch);
   assert.equal(res.status, 200);
   assert.equal((await res.json()).name, 'drone 1');
@@ -57,7 +57,7 @@ test('stores, lists, loads and overwrites a preset', async () => {
   assert.equal(res.status, 200);
   assert.deepEqual(await (await fetch(url('drone 1'))).json(), changed);
 
-  const list = await (await fetch(`${base}/api/presets`)).json();
+  const list = await (await fetch(`${base}/api/patches`)).json();
   assert.deepEqual(list.map((p) => p.name), ['drone 1']);
   assert.ok(!Number.isNaN(Date.parse(list[0].updated)));
 });
@@ -69,7 +69,7 @@ test('accepts names in any script', async () => {
   }
 });
 
-test('treats composed and decomposed names as one preset', async () => {
+test('treats composed and decomposed names as one patch', async () => {
   const composed = 'Grün';
   const decomposed = composed.normalize('NFD');
   assert.notEqual(composed, decomposed);
@@ -88,7 +88,7 @@ test('rejects bad names', async () => {
     const expected = { '': 405, '..': 404 }[name] ?? 400;
     assert.equal(res.status, expected, JSON.stringify(name));
   }
-  assert.equal((await fetch(`${base}/api/presets/%E0%A4%A`)).status, 400);
+  assert.equal((await fetch(`${base}/api/patches/%E0%A4%A`)).status, 400);
 });
 
 test('rejects bad bodies', async () => {
@@ -110,7 +110,7 @@ test('rejects bad bodies', async () => {
   assert.equal((await fetch(url('x'))).status, 404);
 });
 
-test('deletes a preset', async () => {
+test('deletes a patch', async () => {
   await put('gone', patch);
   assert.equal((await fetch(url('gone'), { method: 'DELETE' })).status, 204);
   assert.equal((await fetch(url('gone'))).status, 404);
@@ -118,26 +118,26 @@ test('deletes a preset', async () => {
 });
 
 test('leaves no temporary files', async () => {
-  const files = await readdir(presetsDir);
+  const files = await readdir(patchesDir);
   assert.ok(files.every((f) => f.endsWith('.json') && !f.startsWith('.')), files.join(' '));
 });
 
 test('serves only the api', async () => {
-  for (const path of ['/', '/index.html', '/modules/vco.js', '/preset/test', '/api/nope']) {
+  for (const path of ['/', '/index.html', '/modules/vco.js', '/patch/test', '/api/nope']) {
     const res = await fetch(base + path);
     assert.equal(res.status, 404, path);
     assert.match(res.headers.get('content-type'), /json/);
   }
-  assert.equal(await raw('/api/presets/..%2f..%2fserver'), 400);
-  assert.equal((await fetch(`${base}/api/presets`, { method: 'POST' })).status, 405);
+  assert.equal(await raw('/api/patches/..%2f..%2fserver'), 400);
+  assert.equal((await fetch(`${base}/api/patches`, { method: 'POST' })).status, 405);
 });
 
-test('serves factory presets until a stored version overrides them', async () => {
+test('serves factory patches until a stored version overrides them', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'aparat-store-'));
   const factoryDir = await mkdtemp(join(tmpdir(), 'aparat-factory-'));
-  const s = createService({ presetsDir: dir, factoryDir });
+  const s = createService({ patchesDir: dir, factoryDir });
   await new Promise((ok) => s.listen(0, '127.0.0.1', ok));
-  const at = `http://127.0.0.1:${s.address().port}/api/presets`;
+  const at = `http://127.0.0.1:${s.address().port}/api/patches`;
   const factory = { v: 2, modules: [{ id: 1, type: 'vco' }], cables: [] };
   try {
     await writeFile(join(factoryDir, 'tekno.json'), JSON.stringify(factory));
@@ -146,7 +146,7 @@ test('serves factory presets until a stored version overrides them', async () =>
     assert.deepEqual(await (await fetch(`${at}/tekno`)).json(), factory);
     // nothing is copied into the store
     assert.deepEqual(await readdir(dir), []);
-    // a factory preset without a stored version cannot be deleted
+    // a factory patch without a stored version cannot be deleted
     assert.equal((await fetch(`${at}/tekno`, { method: 'DELETE' })).status, 403);
     // storing over it wins, and an update of the factory file does not show
     const mine = { ...factory, modules: [] };
@@ -165,16 +165,16 @@ test('serves factory presets until a stored version overrides them', async () =>
   }
 });
 
-test('ships the factory presets', async () => {
+test('ships the factory patches', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'aparat-store-'));
-  const s = createService({ presetsDir: dir });
+  const s = createService({ patchesDir: dir });
   await new Promise((ok) => s.listen(0, '127.0.0.1', ok));
-  const at = `http://127.0.0.1:${s.address().port}/api/presets`;
+  const at = `http://127.0.0.1:${s.address().port}/api/patches`;
   try {
     const names = (await (await fetch(at)).json()).map((p) => p.name);
     for (const n of ['drones', 'hardtekno', 'idm']) {
       assert.ok(names.includes(n), n);
-      const file = JSON.parse(await readFile(new URL(`../presets/${n}.json`, import.meta.url), 'utf8'));
+      const file = JSON.parse(await readFile(new URL(`../patches/${n}.json`, import.meta.url), 'utf8'));
       assert.deepEqual(await (await fetch(`${at}/${n}`)).json(), file);
     }
   } finally {

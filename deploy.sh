@@ -23,19 +23,19 @@ esac
 set -a
 . ./deploy.env
 set +a
-for v in DEPLOY_HOST WEB_DIR APP_DIR NGINX_DIR PRESETS_DIR API_HOST API_PORT PUBLIC_URL; do
+for v in DEPLOY_HOST WEB_DIR APP_DIR NGINX_DIR PATCHES_DIR API_HOST API_PORT PUBLIC_URL; do
   [[ -n ${!v:-} ]] || { echo "deploy.env: $v is not set" >&2; exit 1; }
   [[ $v != *_DIR || ${!v} == /* ]] || { echo "deploy.env: $v must be an absolute path" >&2; exit 1; }
   declare "$v=${!v%/}"
 done
 
-# rsync --delete must never reach stored presets or the other directory
+# rsync --delete must never reach stored patches or the other directory
 within() { [[ $1 == "$2" || $1 == "$2"/* ]]; }
 fail() { echo "deploy.env: $*" >&2; exit 1; }
 if within "$WEB_DIR" "$APP_DIR" || within "$APP_DIR" "$WEB_DIR"; then fail "WEB_DIR and APP_DIR must not contain each other"; fi
-if within "$PRESETS_DIR" "$WEB_DIR"; then fail "PRESETS_DIR must not be inside WEB_DIR"; fi
-if within "$PRESETS_DIR" "$APP_DIR" && ! within "$PRESETS_DIR" "$APP_DIR/data"; then
-  fail "PRESETS_DIR inside APP_DIR must be under APP_DIR/data, which deploys keep"
+if within "$PATCHES_DIR" "$WEB_DIR"; then fail "PATCHES_DIR must not be inside WEB_DIR"; fi
+if within "$PATCHES_DIR" "$APP_DIR" && ! within "$PATCHES_DIR" "$APP_DIR/data"; then
+  fail "PATCHES_DIR inside APP_DIR must be under APP_DIR/data, which deploys keep"
 fi
 
 step() { printf '\n== %s\n' "$*"; }
@@ -47,13 +47,13 @@ echo ok
 [[ -z $(git status --porcelain) ]] || echo "note: deploying uncommitted changes"
 
 step "directories on $DEPLOY_HOST"
-[[ -n $DRY ]] || ssh "$DEPLOY_HOST" mkdir -p "$WEB_DIR" "$APP_DIR" "$PRESETS_DIR" "$NGINX_DIR"
+[[ -n $DRY ]] || ssh "$DEPLOY_HOST" mkdir -p "$WEB_DIR" "$APP_DIR" "$PATCHES_DIR" "$NGINX_DIR"
 echo "$WEB_DIR $APP_DIR $NGINX_DIR"
 
 step "frontend -> $DEPLOY_HOST:$WEB_DIR"
 "${RSYNC[@]}" --exclude /test/ web/ "$DEPLOY_HOST:$WEB_DIR/"
 
-# P protects stored presets, the env file and the service unit from --delete
+# P protects stored patches, the env file and the service unit from --delete
 step "api -> $DEPLOY_HOST:$APP_DIR"
 "${RSYNC[@]}" --exclude /test/ --exclude node_modules/ \
   --filter='P /data/' --filter='P /.env' --filter='P /systemd/' \
@@ -79,15 +79,15 @@ fi
 # The service's env file is written from deploy.env and the unit installed from
 # systemd/aparat.service on every deploy.
 step "service"
-ssh "$DEPLOY_HOST" bash -s -- "$APP_DIR" "$PRESETS_DIR" "$API_HOST" "$API_PORT" <<'REMOTE'
+ssh "$DEPLOY_HOST" bash -s -- "$APP_DIR" "$PATCHES_DIR" "$API_HOST" "$API_PORT" <<'REMOTE'
 set -euo pipefail
-APP_DIR=$1 PRESETS_DIR=$2 API_HOST=$3 API_PORT=$4
+APP_DIR=$1 PATCHES_DIR=$2 API_HOST=$3 API_PORT=$4
 
 cat > "$APP_DIR/.env" <<ENV
 # written by deploy.sh from deploy.env
 HOST=$API_HOST
 PORT=$API_PORT
-PRESETS_DIR=$PRESETS_DIR
+PATCHES_DIR=$PATCHES_DIR
 ENV
 
 # the unit from systemd/aparat.service, with this host's paths
@@ -102,7 +102,7 @@ systemctl --user enable --quiet aparat.service
 systemctl --user restart aparat.service
 sleep 1
 systemctl --user is-active aparat.service
-if curl -fsS -o /dev/null "http://$API_HOST:$API_PORT/api/presets"; then
+if curl -fsS -o /dev/null "http://$API_HOST:$API_PORT/api/patches"; then
   echo "api answers on $API_HOST:$API_PORT"
 else
   echo "api does not answer, see: journalctl --user -u aparat -n 50" >&2
@@ -144,7 +144,7 @@ else
 fi
 
 step "check $PUBLIC_URL"
-for path in "" api/presets; do
+for path in "" api/patches; do
   code=$(curl -s -o /dev/null -w '%{http_code}' "$PUBLIC_URL$path") || code=failed
   echo "$code $PUBLIC_URL$path"
 done

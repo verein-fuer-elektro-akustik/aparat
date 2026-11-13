@@ -1,5 +1,5 @@
-// Presets are patch JSON files in one directory, one file per preset.
-// The file name is the encoded preset name, so any name that passes
+// Stored patches are JSON files in one directory, one file per patch.
+// The file name is the encoded patch name, so any name that passes
 // validName maps to exactly one file inside the directory.
 
 import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
@@ -8,7 +8,7 @@ import { join } from 'node:path';
 export const MAX_NAME = 64;
 export const MAX_BYTES = 1024 * 1024;
 
-export class PresetError extends Error {
+export class PatchError extends Error {
   constructor(status, message) {
     super(message);
     this.status = status;
@@ -33,26 +33,26 @@ export function validName(name) {
   );
 }
 
-// Names are compared in NFC, so a composed and a decomposed "Rück" are one preset.
+// Names are compared in NFC, so a composed and a decomposed "Rück" are one patch.
 function checkName(name) {
   const nfc = typeof name === 'string' ? name.normalize('NFC') : name;
   if (!validName(nfc)) {
-    throw new PresetError(400, `preset names are 1-${MAX_NAME} letters, digits, spaces or - _ . ( ) + , ' & #`);
+    throw new PatchError(400, `patch names are 1-${MAX_NAME} letters, digits, spaces or - _ . ( ) + , ' & #`);
   }
   return nfc;
 }
 
 export function checkPatch(patch) {
-  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new PresetError(400, 'a patch is a json object');
-  if (!Array.isArray(patch.modules)) throw new PresetError(400, 'a patch needs a modules list');
-  if (patch.cables !== undefined && !Array.isArray(patch.cables)) throw new PresetError(400, 'cables must be a list');
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new PatchError(400, 'a patch is a json object');
+  if (!Array.isArray(patch.modules)) throw new PatchError(400, 'a patch needs a modules list');
+  if (patch.cables !== undefined && !Array.isArray(patch.cables)) throw new PatchError(400, 'cables must be a list');
 }
 
-// Stored presets live in `dir`. Factory presets are read straight from
-// `factoryDir` and never written: storing a preset with a factory name puts
+// Stored patches live in `dir`. Factory patches are read straight from
+// `factoryDir` and never written: storing a patch with a factory name puts
 // your version in `dir`, which then wins, and deleting it brings the factory
 // one back. So factory updates show up unless you stored over them.
-export class PresetStore {
+export class PatchStore {
   constructor(dir, factoryDir = null) {
     this.dir = dir;
     this.factoryDir = factoryDir;
@@ -82,7 +82,7 @@ export class PresetStore {
   }
 
   // [{name, updated, factory, stored}]: factory when the name is a factory
-  // preset, stored when there is a stored version (which overrides it)
+  // patch, stored when there is a stored version (which overrides it)
   async list() {
     await this.ready;
     const own = await this.names(this.dir);
@@ -106,7 +106,7 @@ export class PresetStore {
     name = checkName(name);
     await this.ready;
     const patch = (await this.read(this.dir, name)) ?? (this.factoryDir && (await this.read(this.factoryDir, name)));
-    if (!patch) throw new PresetError(404, 'no such preset');
+    if (!patch) throw new PatchError(404, 'no such patch');
     return patch;
   }
 
@@ -127,7 +127,7 @@ export class PresetStore {
     return { name, updated: (await stat(target)).mtime.toISOString() };
   }
 
-  // Deletes the stored version. A factory preset without one cannot be deleted.
+  // Deletes the stored version. A factory patch without one cannot be deleted.
   async remove(name) {
     name = checkName(name);
     await this.ready;
@@ -136,8 +136,8 @@ export class PresetStore {
     } catch (err) {
       if (err.code !== 'ENOENT') throw err;
       const factory = this.factoryDir && (await stat(join(this.factoryDir, fileName(name))).catch(() => null));
-      if (factory) throw new PresetError(403, 'factory presets cannot be deleted');
-      throw new PresetError(404, 'no such preset');
+      if (factory) throw new PatchError(403, 'factory patches cannot be deleted');
+      throw new PatchError(404, 'no such patch');
     }
   }
 }

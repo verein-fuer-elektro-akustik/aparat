@@ -1,10 +1,10 @@
-// Client for the preset service (server/). The URL is relative to this file,
+// Client for the patch service (server/). The URL is relative to this file,
 // so the frontend works under any path. Not relative to the page: the page url
-// changes to <app>/preset/<name> when a preset loads, which would move it.
+// changes to <app>/patch/<name> when a patch loads, which would move it.
 // Without the service the page still runs from static hosting, available()
 // just reports false.
 
-const BASE = new URL('../api/presets', import.meta.url).href;
+const BASE = new URL('../api/patches', import.meta.url).href;
 
 async function call(path, options) {
   const res = await fetch(path, options);
@@ -13,14 +13,14 @@ async function call(path, options) {
     try {
       message = (await res.json()).error ?? message;
     } catch {}
-    throw new Error(`preset: ${message}`);
+    throw new Error(`patch: ${message}`);
   }
   return res.status === 204 ? null : res.json();
 }
 
 const url = (name) => `${BASE}/${encodeURIComponent(name)}`;
 
-export const presets = {
+export const patches = {
   async available() {
     try {
       const res = await fetch(BASE);
