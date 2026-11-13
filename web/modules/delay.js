@@ -1,9 +1,13 @@
+// Delay with feedback. A clock patched to sync sets the delay time to the
+// time between its pulses (the time knob then has no effect; the time cv
+// still scales it), so echoes follow the tempo.
+
 const MAX_SECONDS = 4;
 
 export default {
   name: 'delay',
   cols: 3,
-  inputs: { in: 0, time: 0, fb: 0 },
+  inputs: { in: 0, time: 0, fb: 0, sync: 0 },
   outputs: ['out'],
   bypass: { out: 'in' },
   params: {
@@ -11,10 +15,18 @@ export default {
     fb: { min: 0, max: 1.1, default: 0.4 },
     mix: { min: 0, max: 1, default: 0.3 },
   },
-  create: (sr) => ({ sr, buf: new Float32Array(Math.ceil(sr * MAX_SECONDS)), w: 0 }),
+  create: (sr) => ({ sr, buf: new Float32Array(Math.ceil(sr * MAX_SECONDS)), w: 0, clock: false, since: 0, period: 0 }),
   process(s, i, o, p) {
     const len = s.buf.length;
-    let d = p[0] * Math.pow(2, i[1]) * s.sr;
+    // synced while clock pulses keep arriving
+    const clock = i[3] > 1;
+    if (clock && !s.clock) {
+      s.period = s.since > 0 && s.since < len ? s.since : 0;
+      s.since = 0;
+    }
+    s.clock = clock;
+    if (++s.since > len) s.period = 0;
+    let d = (s.period > 0 ? s.period : p[0] * s.sr) * Math.pow(2, i[1]);
     if (d < 1) d = 1;
     else if (d > len - 2) d = len - 2;
     let r = s.w - d;

@@ -107,6 +107,14 @@ class Aparat extends AudioWorkletProcessor {
       case 'param':
         this.setParam(m.id, m.i, m.v);
         break;
+      case 'data': {
+        // a module's file (sampler); kept for when its state is made anew
+        const mod = this.byId.get(m.id);
+        if (!mod) break;
+        mod.data = m.data;
+        mod.def.onData?.(mod.state, m.data);
+        break;
+      }
       case 'midi':
         for (const mod of this.midiMods) mod.def.onMidi(mod.state, m.bytes, mod.param);
         break;
@@ -147,6 +155,7 @@ class Aparat extends AudioWorkletProcessor {
       nIn,
       nOut,
       bypass: null,
+      data: null,
     };
     if (def.bypass) {
       const names = Object.keys(def.inputs);
@@ -284,7 +293,10 @@ class Aparat extends AudioWorkletProcessor {
         const target = m.param[b.p];
         if (b.mix !== target) {
           b.mix = target > b.mix ? Math.min(1, b.mix + b.step) : Math.max(0, b.mix - b.step);
-          if (b.mix === 1) m.state = m.def.create(sampleRate, this.host);
+          if (b.mix === 1) {
+            m.state = m.def.create(sampleRate, this.host);
+            if (m.data) m.def.onData?.(m.state, m.data);
+          }
         }
         const mi = m.in;
         const mo = m.out;

@@ -34,6 +34,17 @@ import atten from './atten.js';
 import chance from './chance.js';
 import crush from './crush.js';
 import quant from './quant.js';
+import div from './div.js';
+import logic from './logic.js';
+import compare from './compare.js';
+import seqSwitch from './switch.js';
+import pan from './pan.js';
+import xfade from './xfade.js';
+import note from './note.js';
+import chorus from './chorus.js';
+import phaser from './phaser.js';
+import meter from './meter.js';
+import sampler from './sampler.js';
 
 // A module is a plain object, imported by both the UI and the audio worklet,
 // so it must not touch the DOM:
@@ -49,21 +60,26 @@ import quant from './quant.js';
 //   onMidi(s, data, p)   optional, incoming midi bytes
 //   display(s)           optional, data drawn on the panel at frame rate
 //   displayKnob          optional, display() returns the knob to outline
+//   displayText(data)    optional, the lines of text to show for display()'s
+//                        data instead of a trace
+//   file                 optional, the panel can load an audio file, which
+//                        arrives as onData(s, {samples, sr}) (null: none)
+//   text                 optional, the panel is a text field kept in the patch
 //   destroy(s)           optional, called when the module is removed
 //   bypass               optional {output: input}, see below
 //
 // Voltages follow VCV Rack: audio ±5 V, 1 V/oct, gates and triggers 10 V
 // (read as high above 1 V).
 
-// order of the add-module menu: sources, timing, drums, shaping, effects,
-// utilities, i/o
+// sources, timing, drums, shaping, effects, utilities, i/o (the add-module
+// menu lists them by name)
 export const defs = [
-  vco, lfo, noise, chaos,
-  clock, seq, steps, euclid, chance, env,
+  vco, lfo, noise, chaos, sampler,
+  clock, div, seq, steps, euclid, chance, env, seqSwitch,
   kick, hat, clap,
-  vcf, vca, mixer, matrix, fold, drive, crush, slew, sampleHold, quant,
-  delay, reverb, granular,
-  atten, scope,
+  vcf, vca, mixer, matrix, pan, xfade, fold, drive, crush, slew, sampleHold, quant,
+  delay, reverb, chorus, phaser, granular,
+  atten, logic, compare, scope, meter, note,
   input, output,
   midiIn, midiCcIn, midiClockIn, midiOut, midiCcOut, midiClockOut,
 ];

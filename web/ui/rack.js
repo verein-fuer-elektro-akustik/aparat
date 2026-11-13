@@ -20,8 +20,13 @@ function div(className, parent) {
 }
 
 export class Rack {
-  constructor({ scroller, sizer, content, cables, send, onChange, onContextMenu }) {
+  constructor({ scroller, sizer, content, cables, send, onChange, onContextMenu, files, onFile }) {
     this.onContextMenu = onContextMenu ?? (() => {});
+    // audio files of modules like the sampler: files.get(name) is the loaded
+    // file or undefined, onFile(m, file) is asked to load one (file: a dropped
+    // File, or null to let the user choose)
+    this.files = files ?? { get: () => undefined };
+    this.onFile = onFile ?? (() => {});
     this.scroller = scroller;
     this.sizer = sizer;
     this.content = content;
@@ -33,7 +38,7 @@ export class Rack {
     this.nextId = 1;
     this.freeSlots = [];
     this.nextSlot = 0;
-    this.selected = null;
+    this.selection = new Set();
     this.learning = null;
     this.dragging = false; // a module or cable is being dragged
     this.midiMap = [];
@@ -61,7 +66,8 @@ export class Rack {
         this.selectCable(this.cableAt(e));
         return;
       }
-      if (e.button === 1 || (e.button === 0 && e.target === content)) this.startPan(e);
+      if (e.button === 0 && e.target === content && e.shiftKey) this.startBand(e);
+      else if (e.button === 1 || (e.button === 0 && e.target === content)) this.startPan(e);
     }, true);
     // stop the browser's middle-click autoscroll
     scroller.addEventListener('mousedown', (e) => {
@@ -87,7 +93,7 @@ export class Rack {
 
   // patch editing
 
-  add(type, { id, x, row, params } = {}) {
+  add(type, { id, x, row, params, data } = {}) {
     const def = registry[type];
     if (!def) return null;
     const keys = Object.keys(def.params);
@@ -101,6 +107,7 @@ export class Rack {
       row: 0,
       keys,
       values,
+      data: data ?? null, // what a note or a file module keeps: {text} or {name}
       knobs: [],
       jacks: { in: [], out: [] },
     };
@@ -131,7 +138,7 @@ export class Rack {
     }
     this.midiMap = this.midiMap.filter((e) => e.id !== m.id);
     if (this.learning?.m === m) this.learning = null;
-    if (this.selected === m) this.selected = null;
+    this.selection.delete(m);
     this.send({ op: 'remove', id: m.id });
     m.el.remove();
     this.modules.delete(m.id);
@@ -171,8 +178,8 @@ export class Rack {
   }
 
   // Add a module at a grid cell, pushing the row's modules aside.
-  insert(type, { x, row }, params) {
-    const m = this.add(type, { params });
+  insert(type, { x, row }, params, data) {
+    const m = this.add(type, { params, data });
     if (!m) return null;
     const snap = new Map([...this.modules.values()].map((o) => [o, { x: o.x, row: o.row }]));
     this.arrange(m, x, row, snap, true);
@@ -202,9 +209,54 @@ export class Rack {
   duplicate(m) {
     if (!this.live(m)) return null;
     const params = Object.fromEntries(m.keys.map((k, i) => [k, m.values[i]]));
-    const copy = this.insert(m.type, { x: m.x + m.def.cols, row: m.row }, params);
+    const copy = this.insert(m.type, { x: m.x + m.def.cols, row: m.row }, params, m.data && { ...m.data });
     this.select(copy);
     return copy;
+  }
+
+  // The given modules (default: the selection) with the cables between them,
+  // in the format of patch files.
+  copy(mods = [...this.selection]) {
+    const ids = new Set(mods.filter((m) => this.live(m)).map((m) => m.id));
+    const all = this.toJSON();
+    return {
+      modules: all.modules.filter((m) => ids.has(m.id)),
+      cables: all.cables.filter((c) => ids.has(c.from[0]) && ids.has(c.to[0])),
+    };
+  }
+
+  // Add what copy() returned, also from another patch: in new rows below the
+  // rack, laid out as they were, and selected.
+  paste(data) {
+    const list = (data?.modules ?? []).filter((p) => registry[p.type]);
+    if (!list.length) return [];
+    const top = Math.min(...list.map((p) => p.row ?? 0));
+    const left = Math.min(...list.map((p) => p.x ?? 0));
+    const below = Math.max(-1, ...[...this.modules.values()].map((m) => m.row)) + 1;
+    const made = new Map();
+    for (const p of list) {
+      const spot = { x: (p.x ?? 0) - left, row: (p.row ?? 0) - top + below };
+      made.set(p.id, this.add(p.type, { ...spot, params: p.params, data: p.data && { ...p.data } }));
+    }
+    this.unoverlap();
+    for (const c of data.cables ?? []) {
+      const a = made.get(c.from[0]);
+      const b = made.get(c.to[0]);
+      if (!a || !b) continue;
+      const i = a.def.outputs.indexOf(c.from[1]);
+      const j = Object.keys(b.def.inputs).indexOf(c.to[1]);
+      if (i >= 0 && j >= 0) this.connect({ m: a, i }, { m: b, i: j });
+    }
+    const mods = [...made.values()];
+    this.select(null);
+    for (const m of mods) this.select(m, true);
+    mods[0].el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    return mods;
+  }
+
+  selectAll() {
+    this.select(null);
+    for (const m of this.modules.values()) this.select(m, true);
   }
 
   // The grid cell under a point on screen, or null outside the rack.
@@ -241,6 +293,35 @@ export class Rack {
 
   sendAdd(m) {
     this.send({ op: 'add', id: m.id, type: m.type, params: m.values });
+    this.sendFile(m);
+  }
+
+  sendFile(m) {
+    if (!m.def.file) return;
+    const file = m.data?.name ? this.files.get(m.data.name) : undefined;
+    this.send({ op: 'data', id: m.id, data: file ?? null });
+    if (m.fileButton) {
+      m.fileButton.textContent = m.data?.name ? `${m.data.name}${file ? '' : ' (missing)'}` : 'load file…';
+      m.fileButton.title = m.data?.name && !file ? 'this file is not in this browser, click to load it again' : '';
+    }
+  }
+
+  // The module plays this file from now on (it has to be in `files`).
+  setFile(m, name) {
+    if (!this.live(m)) return;
+    m.data = { name };
+    this.sendFile(m);
+    this.onChange();
+  }
+
+  // A file was loaded: the modules that use it get it.
+  fileLoaded(name) {
+    for (const m of this.modules.values()) if (m.data?.name === name) this.sendFile(m);
+  }
+
+  // names of the files the patch uses
+  fileNames() {
+    return [...new Set([...this.modules.values()].filter((m) => m.def.file && m.data?.name).map((m) => m.data.name))];
   }
 
   sendConnect(c) {
@@ -264,6 +345,7 @@ export class Rack {
         x: m.x,
         row: m.row,
         params: Object.fromEntries(m.keys.map((k, i) => [k, m.values[i]])),
+        ...(m.data ? { data: m.data } : {}),
       })),
       cables: this.cables.list.map((c) => ({
         from: [c.from.m.id, c.from.m.def.outputs[c.from.i]],
@@ -311,6 +393,11 @@ export class Rack {
       m.x = p.x;
       m.row = p.row;
       this.place(m);
+      if (JSON.stringify(m.data) !== JSON.stringify(p.data ?? null)) {
+        m.data = p.data ?? null;
+        if (m.textArea) m.textArea.value = m.data?.text ?? '';
+        this.sendFile(m);
+      }
       m.keys.forEach((k, i) => {
         const v = p.params?.[k] ?? m.def.params[k].default;
         if (v === m.values[i]) return;
@@ -399,12 +486,44 @@ export class Rack {
     close.addEventListener('click', () => this.remove(m));
     title.append(name, close);
     title.addEventListener('pointerdown', (e) => this.startMove(e, m));
-    el.addEventListener('pointerdown', () => this.select(m));
+    // shift or ctrl adds to (or takes from) the selection; a module that is
+    // part of a selection keeps it, so the group can be dragged or right-clicked
+    el.addEventListener('pointerdown', (e) => {
+      if ((e.shiftKey || e.ctrlKey || e.metaKey) && !e.target.closest('.knob, .jack, button, textarea')) this.select(m, true);
+      else if (!this.selection.has(m)) this.select(m);
+    });
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      this.select(m);
+      if (!this.selection.has(m)) this.select(m);
       this.onContextMenu(e, m);
     });
+
+    if (def.text) {
+      const text = document.createElement('textarea');
+      text.className = 'text';
+      text.spellcheck = false;
+      text.placeholder = 'note';
+      text.setAttribute('aria-label', 'note');
+      text.value = m.data?.text ?? '';
+      text.addEventListener('input', () => {
+        m.data = text.value ? { text: text.value } : null;
+        this.onChange();
+      });
+      m.textArea = text;
+      el.append(text);
+    }
+    if (def.file) {
+      const button = document.createElement('button');
+      button.className = 'file';
+      button.addEventListener('click', () => this.onFile(m, null));
+      m.fileButton = button;
+      el.append(button);
+      el.addEventListener('dragover', (e) => e.preventDefault());
+      el.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files[0]) this.onFile(m, e.dataTransfer.files[0]);
+      });
+    }
 
     if (def.display && !def.displayKnob) {
       m.canvas = document.createElement('canvas');
@@ -490,12 +609,32 @@ export class Rack {
     m.el.style.top = `${top}px`;
   }
 
-  // One thing is selected: a module or a cable (delete removes it).
-  select(m) {
-    this.selected?.el.classList.remove('selected');
-    this.selected = m;
-    m?.el.classList.add('selected');
-    if (m) this.cables.selected = null;
+  // Selected are modules or one cable (delete removes them). select(m) selects
+  // just m (null: nothing); with add it toggles m in the selection.
+  select(m, add = false) {
+    if (!add) {
+      for (const o of this.selection) o.el.classList.remove('selected');
+      this.selection.clear();
+    }
+    if (!m) return;
+    this.cables.selected = null;
+    if (add && this.selection.has(m)) {
+      this.selection.delete(m);
+      m.el.classList.remove('selected');
+    } else {
+      this.selection.add(m);
+      m.el.classList.add('selected');
+    }
+  }
+
+  // the selected module while exactly one is, else null
+  get selected() {
+    return this.selection.size === 1 ? this.selection.values().next().value : null;
+  }
+
+  // drop modules that are gone (after undo)
+  pruneSelection() {
+    for (const m of [...this.selection]) if (!this.live(m)) this.selection.delete(m);
   }
 
   selectCable(c) {
@@ -510,7 +649,7 @@ export class Rack {
   // The cable under the pointer, unless the pointer is on something that
   // takes clicks itself.
   cableAt(e) {
-    if (e.target !== this.content && e.target.closest('.knob, .jack, button, .title, canvas')) return null;
+    if (e.target !== this.content && e.target.closest('.knob, .jack, button, .title, canvas, textarea')) return null;
     if (!this.content.contains(e.target)) return null;
     const p = this.pointer(e);
     return this.cables.hit(p.x, p.y, 6 / this.zoom);
@@ -697,9 +836,103 @@ export class Rack {
     window.addEventListener('pointercancel', up);
   }
 
+  // Shift-drag on empty space: select the modules the rectangle touches.
+  startBand(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const start = this.pointer(e);
+    const band = div('band', this.content);
+    this.select(null);
+    this.cables.selected = null;
+    const move = (ev) => {
+      this.autoScroll(ev);
+      const p = this.pointer(ev);
+      const x0 = Math.min(start.x, p.x);
+      const y0 = Math.min(start.y, p.y);
+      const x1 = Math.max(start.x, p.x);
+      const y1 = Math.max(start.y, p.y);
+      band.style.left = `${x0}px`;
+      band.style.top = `${y0}px`;
+      band.style.width = `${x1 - x0}px`;
+      band.style.height = `${y1 - y0}px`;
+      for (const m of this.modules.values()) {
+        const hit = m.left < x1 && x0 < m.left + m.def.cols * CELL && m.top < y1 && y0 < m.top + ROW;
+        if (hit !== this.selection.has(m)) this.select(m, true);
+      }
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      band.remove();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  }
+
+  // Dragging one module of a selection moves them all, by whole cells, as far
+  // as they fit between the other modules (which do not make room).
+  startGroupMove(e) {
+    const group = [...this.selection];
+    const origin = new Map(group.map((o) => [o, { x: o.x, row: o.row }]));
+    const start = this.pointer(e);
+    const fits = (dx, drow) => group.every((o) => {
+      const x = origin.get(o).x + dx;
+      const row = origin.get(o).row + drow;
+      if (x < 0 || row < 0) return false;
+      for (const other of this.modules.values()) {
+        if (origin.has(other) || other.row !== row) continue;
+        if (x < other.x + other.def.cols && other.x < x + o.def.cols) return false;
+      }
+      return true;
+    });
+    const put = (dx, drow) => {
+      for (const o of group) {
+        o.x = origin.get(o).x + dx;
+        o.row = origin.get(o).row + drow;
+        this.place(o);
+      }
+      this.relayoutCables();
+    };
+    this.dragging = true;
+    for (const o of group) o.el.classList.add('dragging');
+    const move = (ev) => {
+      this.autoScroll(ev);
+      const p = this.pointer(ev);
+      const dx = Math.round((p.x - start.x) / CELL);
+      const drow = Math.round((p.y - start.y) / ROW);
+      if (fits(dx, drow)) put(dx, drow);
+      this.updateExtent({ right: p.x + 2 * CELL, bottom: p.y + ROW });
+    };
+    const end = (cancel) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      window.removeEventListener('keydown', key);
+      this.dragging = false;
+      for (const o of group) o.el.classList.remove('dragging');
+      if (cancel) put(0, 0);
+      this.updateExtent();
+      if (!cancel) this.onChange();
+    };
+    const up = () => end(false);
+    const key = (ev) => {
+      if (ev.key === 'Escape') end(true);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    window.addEventListener('keydown', key);
+  }
+
   startMove(e, m) {
     if (e.button !== 0 || e.target.tagName === 'BUTTON') return;
     e.preventDefault();
+    if (this.selection.size > 1 && this.selection.has(m) && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      this.startGroupMove(e);
+      return;
+    }
     const snap = new Map([...this.modules.values()].map((o) => [o, { x: o.x, row: o.row }]));
     const start = this.pointer(e);
     const grab = { x: start.x - m.left, y: start.y - m.top };
@@ -755,7 +988,7 @@ export class Rack {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
-    this.select(m);
+    if (!this.selection.has(m)) this.select(m);
     // Both ends work alike: dragging a jack that has cables picks up the
     // latest one, to move it to another jack or drop it to remove it. Ctrl
     // starts a new cable instead (an output feeds any number of inputs, an
@@ -799,6 +1032,23 @@ export class Rack {
 
   // displays
 
+  drawText(m, lines) {
+    const c = m.canvas;
+    const dpr = (devicePixelRatio || 1) * this.zoom;
+    const w = Math.round(c.clientWidth * dpr);
+    const h = Math.round(c.clientHeight * dpr);
+    if (c.width !== w || c.height !== h) {
+      c.width = w;
+      c.height = h;
+    }
+    const g = c.getContext('2d');
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = '#9c9c9c';
+    g.font = `${11 * dpr}px "JetBrains Mono", monospace`;
+    g.textBaseline = 'middle';
+    lines.forEach((line, i) => g.fillText(line, 8 * dpr, ((i + 0.5) * h) / lines.length));
+  }
+
   drawDisplay(id, data) {
     const m = this.modules.get(id);
     if (m?.def.displayKnob) {
@@ -811,6 +1061,10 @@ export class Rack {
     }
     if (!m?.canvas) return;
     const c = m.canvas;
+    if (m.def.displayText) {
+      this.drawText(m, m.def.displayText(data));
+      return;
+    }
     // canvas pixels follow the zoom so the trace stays sharp
     const dpr = (devicePixelRatio || 1) * this.zoom;
     const w = Math.round(c.clientWidth * dpr);

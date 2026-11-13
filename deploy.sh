@@ -43,6 +43,7 @@ RSYNC=(rsync -rlptz --mkpath --delete --itemize-changes $DRY)
 
 step "tests"
 (cd server && npm test --silent >/dev/null) || { echo "tests fail, not deploying (cd server && npm test)" >&2; exit 1; }
+node --test web/test/ >/dev/null || { echo "engine tests fail, not deploying (node --test web/test/)" >&2; exit 1; }
 echo ok
 [[ -z $(git status --porcelain) ]] || echo "note: deploying uncommitted changes"
 

@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>aparat</title>
+<meta name="description" content="aparat, a modular synthesizer in the browser: patch oscillators, filters, sequencers and effects with cables.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="ui/style.css">
 </head>
 <body>
@@ -16,7 +18,9 @@
         <button id="new" role="menuitem">new patch</button>
         <button id="load" role="menuitem" title="open a patch json file">import…</button>
         <button id="save" role="menuitem" title="download the patch as a json file">export</button>
+        <button id="share" role="menuitem" title="copy a link that holds the whole patch, nothing is stored on the server">copy link</button>
         <input id="file" type="file" accept=".json,application/json" hidden>
+        <input id="sampleFile" type="file" accept="audio/*" hidden>
         <!-- patches stored on the server, shown when the patch service answers -->
         <div id="patches" hidden>
           <hr>
@@ -41,6 +45,9 @@
         <button id="redo" role="menuitem" disabled>redo <kbd>ctrl+shift+z</kbd></button>
         <hr>
         <button id="editAdd" role="menuitem">add module… <kbd>shift+a</kbd></button>
+        <button id="editSelectAll" role="menuitem">select all <kbd>ctrl+a</kbd></button>
+        <button id="editCopy" role="menuitem">copy <kbd>ctrl+c</kbd></button>
+        <button id="editPaste" role="menuitem">paste <kbd>ctrl+v</kbd></button>
         <button id="editDuplicate" role="menuitem">duplicate <kbd>ctrl+d</kbd></button>
         <button id="editRandom" role="menuitem">random</button>
         <button id="editReset" role="menuitem">reset</button>
@@ -65,6 +72,7 @@
     <div class="menu" data-menu="midi">
       <button class="menu-title" aria-haspopup="menu" aria-expanded="false">midi</button>
       <div class="menu-items" role="menu" hidden>
+        <button id="keys" role="menuitem" data-keep title="a w s e d f… play notes, z and x change the octave"></button>
         <button id="midi" role="menuitem" data-keep>enable midi</button>
         <div id="midiPorts" hidden>
           <label class="menu-row">in <select id="midiIn" aria-label="midi input"></select></label>
@@ -104,9 +112,11 @@
     <li>drag jacks to patch, pull a cable off a jack to move or remove it</li>
     <li>ctrl-drag a jack for another cable</li>
     <li>double-click a knob to reset, right-click it for midi learn</li>
-    <li>right-click a module: random, reset, duplicate, remove</li>
+    <li>right-click a module: random, reset, duplicate, copy, remove</li>
     <li>right-click empty space opens this menu</li>
-    <li>delete removes the selected module or cable</li>
+    <li>shift-click modules or shift-drag empty space to select several</li>
+    <li>delete removes the selected modules or cable</li>
+    <li>the keys a w s e d f… play notes, z and x change the octave</li>
     <li>drag empty space or middle-drag to move the view</li>
     <li>ctrl+wheel, pinch or + − 0 zoom the rack</li>
   </ul>

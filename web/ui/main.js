@@ -6,46 +6,13 @@ import { menubar } from './menubar.js';
 import { Midi } from './midi.js';
 import { patches } from './patches.js';
 import { Rack, ZOOM_MAX, ZOOM_MIN } from './rack.js';
-import { encodeWav } from './wav.js';
+import { makeKeys } from './keys.js';
+import { makeRecorder } from './recorder.js';
+import { samples } from './samples.js';
+import { patchFromHash, patchToHash } from './share.js';
+import { download, guarded, showError, showInfo, stamp } from './toast.js';
 
 const $ = (id) => document.getElementById(id);
-
-// Warnings stack at the top right. Each closes on click or after a while; the
-// same message again restarts its timer instead of stacking up.
-const TOAST_MS = 8000;
-const MAX_TOASTS = 4;
-
-function showError(err) {
-  if (!err) return;
-  const text = String(err.message ?? err);
-  const root = $('error');
-  let toast = [...root.children].find((t) => t.textContent === text);
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = text;
-    toast.title = 'click to close';
-    toast.addEventListener('click', () => toast.remove());
-    root.append(toast);
-    while (root.children.length > MAX_TOASTS) root.firstElementChild.remove();
-  }
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => toast.remove(), TOAST_MS);
-}
-// keep warnings just below the toolbar, which wraps on narrow windows
-new ResizeObserver(() => {
-  $('error').style.top = `${document.querySelector('header').getBoundingClientRect().bottom + 8}px`;
-}).observe(document.querySelector('header'));
-window.addEventListener('error', (e) => showError(e.message));
-window.addEventListener('unhandledrejection', (e) => showError(e.reason));
-
-const guarded = (fn) => async (...args) => {
-  try {
-    await fn(...args);
-  } catch (err) {
-    showError(err);
-  }
-};
 
 const audio = new AudioEngine(onEngineMessage);
 const cables = new CableLayer($('cables'), $('rack'));
@@ -63,13 +30,18 @@ const rack = new Rack({
   cables,
   send: (m) => audio.send(m),
   onChange: () => undo.changed(),
-  onContextMenu: (e, m) => openContext(e.clientX, e.clientY, m.type, [
-    ['random', () => rack.randomize(m)],
-    ['reset', () => rack.resetParams(m)],
-    ['duplicate', () => rack.duplicate(m)],
-    ['remove', () => rack.remove(m)],
+  files: samples,
+  onFile: (m, file) => (file ? loadSample(m, file) : chooseSample(m)),
+  // the menu works on the selection, which the right-clicked module is part of
+  onContextMenu: (e, m) => openContext(e.clientX, e.clientY, rack.selection.size > 1 ? `${rack.selection.size} modules` : m.type, [
+    ['random', () => selected().forEach((o) => rack.randomize(o))],
+    ['reset', () => selected().forEach((o) => rack.resetParams(o))],
+    ['duplicate', duplicateSelection],
+    ['copy', copySelection],
+    ['remove', removeSelection],
   ]),
 });
+const recorder = makeRecorder({ audio, button: $('record') });
 
 // undo / redo
 //
@@ -88,6 +60,7 @@ const undo = {
     this.stack = [this.snapshot()];
     this.at = 0;
     this.buttons();
+    patchChanged();
   },
   changed() {
     if (this.quiet) return;
@@ -103,6 +76,7 @@ const undo = {
     if (this.stack.length > 200) this.stack.shift();
     this.at = this.stack.length - 1;
     this.buttons();
+    patchChanged();
   },
   go(dir) {
     this.commit();
@@ -120,8 +94,10 @@ const undo = {
     }
     // module and cable order can differ after apply; keep what the rack now says
     this.stack[to] = this.snapshot();
-    if (rack.selected && !rack.live(rack.selected)) rack.select(null);
+    rack.pruneSelection();
     this.buttons();
+    patchChanged();
+    restoreSamples();
   },
   buttons() {
     $('undo').disabled = this.at <= 0;
@@ -136,23 +112,69 @@ $('redo').addEventListener('click', () => undo.go(1));
 const bar = menubar($('menubar'), {
   onOpen: (name) => {
     if (name !== 'edit') return;
-    const m = rack.selected;
-    for (const id of ['editDuplicate', 'editRandom', 'editReset']) $(id).disabled = !m;
-    $('editRemove').disabled = !m && !rack.selectedCable;
+    const none = !rack.selection.size;
+    for (const id of ['editDuplicate', 'editCopy', 'editRandom', 'editReset']) $(id).disabled = none;
+    $('editPaste').disabled = !clipboard();
+    $('editRemove').disabled = none && !rack.selectedCable;
   },
 });
 $('editAdd').addEventListener('click', () => {
   const r = $('add').getBoundingClientRect();
   openMenu(r.left, r.bottom + 4, null);
 });
-$('editDuplicate').addEventListener('click', () => rack.selected && rack.duplicate(rack.selected));
-$('editRandom').addEventListener('click', () => rack.selected && rack.randomize(rack.selected));
-$('editReset').addEventListener('click', () => rack.selected && rack.resetParams(rack.selected));
+$('editDuplicate').addEventListener('click', () => duplicateSelection());
+$('editCopy').addEventListener('click', () => copySelection());
+$('editPaste').addEventListener('click', () => pasteClipboard());
+$('editSelectAll').addEventListener('click', () => rack.selectAll());
+$('editRandom').addEventListener('click', () => selected().forEach((m) => rack.randomize(m)));
+$('editReset').addEventListener('click', () => selected().forEach((m) => rack.resetParams(m)));
 $('editRemove').addEventListener('click', () => removeSelection());
+
+// selection: the edit menu, the right-click menu and the keys work on all
+// selected modules
+
+function selected() {
+  return [...rack.selection];
+}
 
 function removeSelection() {
   if (rack.selectedCable) rack.disconnect(rack.selectedCable);
-  else if (rack.selected) rack.remove(rack.selected);
+  else selected().forEach((m) => rack.remove(m));
+}
+
+function added(mods) {
+  restoreSamples();
+  if (mods.some((m) => m?.type === 'input')) audio.openInput().catch(showError);
+}
+
+// one module lands next to the original, several below the rack
+function duplicateSelection() {
+  if (rack.selection.size === 1) added([rack.duplicate(rack.selected)]);
+  else added(rack.paste(rack.copy()));
+}
+
+// Copied modules go to localStorage, not to the system clipboard: that needs
+// no permission, and pasting works in another patch or tab of aparat.
+function clipboard() {
+  try {
+    return JSON.parse(localStorage.getItem('aparat.clipboard'));
+  } catch {
+    return null;
+  }
+}
+
+function copySelection() {
+  if (!rack.selection.size) return;
+  try {
+    localStorage.setItem('aparat.clipboard', JSON.stringify(rack.copy()));
+  } catch (err) {
+    showError(`could not copy: ${err.message}`);
+  }
+}
+
+function pasteClipboard() {
+  const data = clipboard();
+  if (data) added(rack.paste(data));
 }
 
 // right-click menu
@@ -216,7 +238,93 @@ function loadPatch(patch) {
   // a patch without midi settings (new, default, older files) keeps the ports
   if (patch.midi) midi.setPorts(patch.midi.in, patch.midi.out);
   if (usesInput()) audio.openInput().catch(showError);
+  restoreSamples();
 }
+
+// unsaved changes
+//
+// `saved` is the patch as it was loaded or stored. While the rack differs, the
+// name in the header gets a star, leaving the page asks first, and the rack is
+// kept in this browser (autosave) and comes back on the next visit.
+
+const canon = (patch) => JSON.stringify({
+  modules: [...patch.modules].sort((a, b) => a.id - b.id),
+  cables: patch.cables.map((c) => JSON.stringify(c)).sort(),
+  midiMap: patch.midiMap,
+});
+let saved = null;
+// the name of the patch whose changes are in the autosave, undefined for none
+let autosaved;
+try {
+  autosaved = JSON.parse(localStorage.getItem('aparat.autosave'))?.name;
+} catch {}
+const dirty = () => saved !== null && canon(rack.toJSON()) !== saved;
+
+function markSaved() {
+  undo.commit();
+  saved = canon(rack.toJSON());
+  patchChanged();
+}
+
+// called after every step of the undo history
+function patchChanged() {
+  const changed = dirty();
+  const name = patchFromPath();
+  $('patchCurrent').textContent = `${name ?? ''}${changed ? ' *' : ''}`;
+  $('patchCurrent').title = changed ? 'changed since it was loaded or stored' : 'loaded patch';
+  try {
+    if (changed) {
+      localStorage.setItem('aparat.autosave', JSON.stringify({ name, patch: currentPatch() }));
+      autosaved = name;
+    } else if (autosaved === name) {
+      // only this patch's: unsaved changes to another patch stay
+      localStorage.removeItem('aparat.autosave');
+      autosaved = undefined;
+    }
+  } catch {}
+}
+
+window.addEventListener('beforeunload', (e) => {
+  undo.commit();
+  if (dirty()) e.preventDefault();
+});
+
+// audio files of samplers
+//
+// A patch only names its files. They come back from this browser's storage
+// if they were loaded here before.
+
+async function restoreSamples() {
+  for (const name of rack.fileNames()) {
+    if (!samples.get(name) && (await samples.restore(name))) rack.fileLoaded(name);
+  }
+}
+
+const loadSample = guarded(async (m, file) => {
+  const name = await samples.add(file);
+  rack.fileLoaded(name); // other samplers playing a file of this name
+  rack.setFile(m, name);
+});
+
+let sampleFor = null;
+function chooseSample(m) {
+  sampleFor = m;
+  $('sampleFile').click();
+}
+$('sampleFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (file && sampleFor) loadSample(sampleFor, file);
+});
+// an audio file dropped on empty rack space becomes a sampler there
+$('content').addEventListener('dragover', (e) => e.preventDefault());
+$('content').addEventListener('drop', (e) => {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  const cell = rack.cellAt(e.clientX, e.clientY);
+  if (e.target !== $('content') || !file || !cell) return;
+  loadSample(rack.insert('sampler', cell), file);
+});
 
 function usesInput() {
   return [...rack.modules.values()].some((m) => m.type === 'input');
@@ -238,15 +346,14 @@ function patchFromPath() {
 function showPatchInUrl(name) {
   const url = name ? new URL(`patch/${encodeURIComponent(name)}`, appRoot) : appRoot;
   if (url.href !== location.href) history.replaceState(null, '', url);
-  $('patchCurrent').textContent = name ?? '';
   $('patchName').value = name ?? '';
+  patchChanged();
   markCurrentPatch();
   updatePatchButtons();
 }
 
 // engine messages
 
-let rec = null;
 let cpu = 0;
 const clipLamps = [];
 const clipUntil = [];
@@ -260,10 +367,7 @@ function onEngineMessage(m) {
       midi.send(m.data);
       break;
     case 'rec':
-      if (rec) {
-        rec.channels = m.channels;
-        rec.blocks.push(m.data);
-      }
+      recorder.onBlock(m);
       break;
     case 'error':
       showError(m.message);
@@ -304,7 +408,7 @@ function onMidiMessage(data) {
 // toolbar
 
 async function startAudio() {
-  stopRecording();
+  recorder.stop();
   try {
     await audio.start($('device').value);
   } catch (err) {
@@ -320,7 +424,7 @@ async function startAudio() {
 }
 
 async function stopAudio() {
-  stopRecording();
+  recorder.stop();
   await audio.stop();
   cables.clearLevels();
   $('start').textContent = 'start';
@@ -341,38 +445,6 @@ async function showDevices() {
   select.value = outputs.some((d) => d.deviceId === previous) ? previous : '';
 }
 
-function download(blob, name) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
-
-const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-
-function stopRecording() {
-  if (!rec) return;
-  audio.send({ op: 'record', on: false });
-  const { blocks, channels } = rec;
-  rec = null;
-  $('record').classList.remove('on');
-  $('record').textContent = 'record';
-  if (blocks.length) download(encodeWav(blocks, channels, audio.ctx.sampleRate), `aparat-${stamp()}.wav`);
-}
-
-function toggleRecording() {
-  if (rec) {
-    stopRecording();
-    return;
-  }
-  if (!audio.running) throw new Error('start audio first');
-  rec = { blocks: [], channels: audio.channels };
-  audio.send({ op: 'record', on: true });
-  $('record').classList.add('on');
-  $('record').textContent = 'stop rec';
-}
-
 // add-module menu, shift+a opens it at the pointer
 
 const menu = $('menu');
@@ -388,7 +460,7 @@ async function addModule(name) {
   if (name === 'input') await audio.openInput();
 }
 
-for (const def of defs) {
+for (const def of [...defs].sort((a, b) => a.name.localeCompare(b.name))) {
   const button = document.createElement('button');
   button.textContent = def.name;
   button.addEventListener('click', guarded(() => addModule(def.name)));
@@ -480,10 +552,42 @@ $('midi').addEventListener('click', guarded(async () => {
   $('midi').hidden = true;
   $('midiPorts').hidden = false;
 }));
+// the computer keyboard plays notes, unless switched off in the midi menu
+let keysOn = true;
+try {
+  keysOn = localStorage.getItem('aparat.keys') !== 'off';
+} catch {}
+const keys = makeKeys({ send: onMidiMessage, enabled: () => keysOn });
+function showKeys() {
+  $('keys').textContent = `computer keyboard: ${keysOn ? 'on' : 'off'}`;
+}
+showKeys();
+$('keys').addEventListener('click', () => {
+  keysOn = !keysOn;
+  keys.release();
+  showKeys();
+  try {
+    localStorage.setItem('aparat.keys', keysOn ? 'on' : 'off');
+  } catch {}
+});
+
 $('new').addEventListener('click', () => {
   loadPatch(newPatch);
   showPatchInUrl(null);
+  markSaved();
 });
+$('share').addEventListener('click', guarded(async () => {
+  const url = appRoot.href + (await patchToHash(currentPatch()));
+  const files = rack.fileNames().length ? ' (audio files are not part of it)' : '';
+  try {
+    await navigator.clipboard.writeText(url);
+    showInfo(`link to this patch copied${files}`);
+  } catch {
+    // no clipboard access: the address bar has it
+    history.replaceState(null, '', url);
+    showInfo(`the address bar now holds a link to this patch${files}`);
+  }
+}));
 $('save').addEventListener('click', () => {
   download(new Blob([JSON.stringify(currentPatch(), null, 2)], { type: 'application/json' }), `aparat-${stamp()}.json`);
 });
@@ -494,8 +598,9 @@ $('file').addEventListener('change', guarded(async (e) => {
   if (!file) return;
   loadPatch(JSON.parse(await file.text()));
   showPatchInUrl(null);
+  markSaved();
 }));
-$('record').addEventListener('click', guarded(toggleRecording));
+$('record').addEventListener('click', guarded(() => recorder.toggle()));
 
 // patches on the server, only shown when the service is there
 
@@ -570,6 +675,7 @@ const loadNamedPatch = guarded(async () => {
   const name = $('patchName').value.trim();
   loadPatch(await patches.load(name));
   showPatchInUrl(name);
+  markSaved();
   flash($('patchLoad'), 'loaded');
 });
 
@@ -582,6 +688,7 @@ $('patchStore').addEventListener('click', guarded(async () => {
   const name = $('patchName').value.trim();
   await patches.store(name, currentPatch());
   showPatchInUrl(name);
+  markSaved();
   await refreshPatches();
   flash($('patchStore'), 'stored');
 }));
@@ -602,6 +709,7 @@ $('patchDelete').addEventListener('click', guarded(async () => {
     // reverted: show the factory version
     loadPatch(await patches.load(name));
     showPatchInUrl(name);
+    markSaved();
     flash(button, 'reverted');
     return;
   }
@@ -667,9 +775,27 @@ window.addEventListener('keydown', (e) => {
     rack.cables.selected = null;
     return;
   }
-  if ((e.ctrlKey || e.metaKey) && !e.altKey && e.code === 'KeyD') {
+  if (keys.keydown(e)) {
     e.preventDefault();
-    if (rack.selected) rack.duplicate(rack.selected);
+    return;
+  }
+  const command = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey;
+  if (command && e.code === 'KeyD') {
+    e.preventDefault();
+    if (rack.selection.size) duplicateSelection();
+    return;
+  }
+  if (command && e.code === 'KeyA') {
+    e.preventDefault();
+    rack.selectAll();
+    return;
+  }
+  if (command && e.code === 'KeyC') {
+    copySelection();
+    return;
+  }
+  if (command && e.code === 'KeyV') {
+    pasteClipboard();
     return;
   }
   if ((e.ctrlKey || e.metaKey) && !e.altKey && e.code === 'KeyS') {
@@ -699,21 +825,92 @@ window.addEventListener('keydown', (e) => {
   if ((e.key === 'Delete' || e.key === 'Backspace') && menu.hidden) removeSelection();
 });
 
-// The patch from the url, or else the factory patch "default". Without the
+// touch: a long press is a right-click (browsers without a context menu on
+// touch, like Safari on iOS, never send one)
+{
+  const HOLD_MS = 550;
+  let timer = 0;
+  let fired = 0;
+  const cancel = () => clearTimeout(timer);
+  $('rack').addEventListener('pointerdown', (e) => {
+    cancel();
+    if (e.pointerType !== 'touch') return;
+    const { target, clientX, clientY } = e;
+    const moved = (ev) => {
+      if (Math.hypot(ev.clientX - clientX, ev.clientY - clientY) > 8) cancel();
+    };
+    window.addEventListener('pointermove', moved);
+    const done = () => {
+      cancel();
+      window.removeEventListener('pointermove', moved);
+      window.removeEventListener('pointerup', done);
+      window.removeEventListener('pointercancel', done);
+    };
+    window.addEventListener('pointerup', done);
+    window.addEventListener('pointercancel', done);
+    timer = setTimeout(() => {
+      fired = Date.now();
+      target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX, clientY }));
+    }, HOLD_MS);
+  }, true);
+  // the browser's own long-press menu event: use it instead of ours, or drop
+  // it if ours was first
+  window.addEventListener('contextmenu', (e) => {
+    if (!e.isTrusted) return;
+    cancel();
+    if (Date.now() - fired < 1000) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
+}
+
+// What the rack starts with: a patch packed into the link, else the patch
+// named in the url, else the factory patch "default". Unsaved changes from
+// the last visit come back on top of the patch they were made to. Without the
 // patch service (or if loading fails) the rack starts with a new patch.
-const startPatch = patchFromPath() ?? 'default';
+async function loadStored(name) {
+  try {
+    loadPatch(await patches.load(name));
+    showPatchInUrl(name);
+  } catch (err) {
+    showError(`could not load patch "${name}": ${err.message.replace(/^patch: /, '')}`);
+    loadPatch(newPatch);
+    showPatchInUrl(null);
+  }
+}
+
+let unsaved = null;
 try {
-  loadPatch(await patches.load(startPatch));
-  showPatchInUrl(startPatch);
-} catch (err) {
-  showError(`could not load patch "${startPatch}": ${err.message.replace(/^patch: /, '')}`);
-  loadPatch(newPatch);
+  unsaved = JSON.parse(localStorage.getItem('aparat.autosave'));
+} catch {}
+let shared = null;
+try {
+  shared = await patchFromHash(location.hash);
+} catch {
+  showError('the patch in this link is damaged');
+}
+const named = patchFromPath();
+if (shared) {
+  loadPatch(shared);
   showPatchInUrl(null);
+  markSaved();
+} else if (unsaved?.patch && (named === null || named === unsaved.name)) {
+  if (unsaved.name) await loadStored(unsaved.name);
+  else showPatchInUrl(null);
+  markSaved();
+  undo.reset();
+  loadPatch(unsaved.patch);
+  showInfo('unsaved changes from your last visit are back (undo returns to the patch as stored)');
+} else {
+  await loadStored(named ?? 'default');
+  markSaved();
 }
 let savedZoom = 1;
 try {
   savedZoom = Number(localStorage.getItem('aparat.zoom')) || 1;
 } catch {}
 zoomTo(savedZoom);
-undo.reset();
+if (!dirty()) undo.reset();
+else patchChanged();
 window.aparat = { rack, audio, midi, undo };
