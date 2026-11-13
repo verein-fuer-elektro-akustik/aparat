@@ -33,7 +33,7 @@ import reverb from './reverb.js';
 import atten from './atten.js';
 import chance from './chance.js';
 import crush from './crush.js';
-import quant from './quant.js';
+import quant from './quantize.js';
 import div from './div.js';
 import logic from './logic.js';
 import compare from './compare.js';
