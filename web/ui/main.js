@@ -1,7 +1,7 @@
 import { defs } from '../modules/index.js';
 import { AudioEngine, listOutputs } from './audio.js';
 import { CableLayer } from './cables.js';
-import { defaultPatch } from './default-patch.js';
+import { newPatch } from './new-patch.js';
 import { menubar } from './menubar.js';
 import { Midi } from './midi.js';
 import { patches } from './patches.js';
@@ -314,7 +314,7 @@ async function startAudio() {
   rack.replay();
   buildClipLamps();
   $('channels').textContent = `${audio.channels} ch · ${audio.ctx.sampleRate} hz`;
-  $('start').textContent = 'stop audio';
+  $('start').textContent = 'stop';
   $('start').classList.add('on');
   if (usesInput()) await audio.openInput();
 }
@@ -323,7 +323,7 @@ async function stopAudio() {
   stopRecording();
   await audio.stop();
   cables.clearLevels();
-  $('start').textContent = 'start audio';
+  $('start').textContent = 'start';
   $('start').classList.remove('on');
   $('channels').textContent = 'off';
   $('cpu').textContent = '';
@@ -481,7 +481,7 @@ $('midi').addEventListener('click', guarded(async () => {
   $('midiPorts').hidden = false;
 }));
 $('new').addEventListener('click', () => {
-  loadPatch({ modules: [], cables: [] });
+  loadPatch(newPatch);
   showPatchInUrl(null);
 });
 $('save').addEventListener('click', () => {
@@ -699,18 +699,15 @@ window.addEventListener('keydown', (e) => {
   if ((e.key === 'Delete' || e.key === 'Backspace') && menu.hidden) removeSelection();
 });
 
-const startPatch = patchFromPath();
-if (startPatch) {
-  try {
-    loadPatch(await patches.load(startPatch));
-    showPatchInUrl(startPatch);
-  } catch (err) {
-    showError(`could not load patch "${startPatch}": ${err.message.replace(/^patch: /, '')}`);
-    loadPatch(defaultPatch);
-    showPatchInUrl(null);
-  }
-} else {
-  loadPatch(defaultPatch);
+// The patch from the url, or else the factory patch "default". Without the
+// patch service (or if loading fails) the rack starts with a new patch.
+const startPatch = patchFromPath() ?? 'default';
+try {
+  loadPatch(await patches.load(startPatch));
+  showPatchInUrl(startPatch);
+} catch (err) {
+  showError(`could not load patch "${startPatch}": ${err.message.replace(/^patch: /, '')}`);
+  loadPatch(newPatch);
   showPatchInUrl(null);
 }
 let savedZoom = 1;
