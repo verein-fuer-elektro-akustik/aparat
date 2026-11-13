@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Deploys aparat: the static frontend to WEB_DIR, the API service to APP_DIR,
-# both on DEPLOY_HOST, and (re)starts the API as a systemd user service.
+# the nginx config to NGINX_DIR, all on DEPLOY_HOST, and (re)starts the API as a systemd user service.
 # Settings come from deploy.env (see deploy.env.example).
 #
 #   ./deploy.sh          test, deploy, restart, check
 #   ./deploy.sh -n       dry run: show what would be copied, change nothing
 #
-# nginx is set up once by hand, see the end of this script's output.
+# nginx: the config goes to NGINX_DIR; the symlink into sites-enabled and the
+# include in the site are set up once by hand, see the script's output.
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -18,7 +19,7 @@ DRY=
 set -a
 . ./deploy.env
 set +a
-for v in DEPLOY_HOST WEB_DIR APP_DIR PRESETS_DIR API_HOST API_PORT PUBLIC_URL; do
+for v in DEPLOY_HOST WEB_DIR APP_DIR NGINX_DIR PRESETS_DIR API_HOST API_PORT PUBLIC_URL; do
   [[ -n ${!v:-} ]] || { echo "deploy.env: $v is not set" >&2; exit 1; }
 done
 
@@ -37,25 +38,23 @@ echo "$WEB_DIR $APP_DIR"
 step "frontend -> $DEPLOY_HOST:$WEB_DIR"
 "${RSYNC[@]}" --exclude /test/ web/ "$DEPLOY_HOST:$WEB_DIR/"
 
-# P protects stored presets, the env file, the nginx include and the service
-# unit from --delete
+# P protects stored presets, the env file and the service unit from --delete
 step "api -> $DEPLOY_HOST:$APP_DIR"
 "${RSYNC[@]}" --exclude /test/ --exclude node_modules/ \
-  --filter='P /data/' --filter='P /.env' --filter='P /nginx/' --filter='P /systemd/' \
+  --filter='P /data/' --filter='P /.env' --filter='P /systemd/' \
   server/ "$DEPLOY_HOST:$APP_DIR/"
 "${RSYNC[@]}" systemd/aparat.service "$DEPLOY_HOST:$APP_DIR/systemd/aparat.service" 2>/dev/null \
   || [[ -n $DRY ]]
 
-# the include, with the port from deploy.env
+# nginx config, aparat.conf with the paths and port from deploy.env
+step "nginx config -> $DEPLOY_HOST:$NGINX_DIR"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-sed "s|http://127.0.0.1:8001/|http://$API_HOST:$API_PORT/|" nginx/aparat.conf > "$tmp/aparat.conf"
-# (a dry run of the first deploy cannot copy into the missing nginx/ directory)
-if ! NGINX_CHANGED=$("${RSYNC[@]}" --checksum "$tmp/aparat.conf" "$DEPLOY_HOST:$APP_DIR/nginx/aparat.conf" 2>/dev/null); then
-  [[ -n $DRY ]] || exit 1
-  NGINX_CHANGED="would install nginx/aparat.conf"
-fi
-if [[ -n $NGINX_CHANGED ]]; then echo "$NGINX_CHANGED"; fi
+sed -e "s|@WEB_DIR@|$WEB_DIR|g" -e "s|@API@|$API_HOST:$API_PORT|g" nginx/aparat.conf > "$tmp/aparat.conf"
+cp nginx/aparat-locations.conf "$tmp/"
+NGINX_CHANGED=$(rsync -rlptz --checksum --itemize-changes $DRY \
+  "$tmp/aparat.conf" "$tmp/aparat-locations.conf" "$DEPLOY_HOST:$NGINX_DIR/")
+if [[ -n $NGINX_CHANGED ]]; then echo "$NGINX_CHANGED"; else echo unchanged; fi
 
 if [[ -n $DRY ]]; then
   step "dry run, nothing changed"
@@ -95,24 +94,32 @@ if [[ $(loginctl show-user "$USER" -p Linger --value) != yes ]]; then
 fi
 REMOTE
 
+# The symlink and the include line need root, so they are set up once by hand.
+# After that, a changed config is reloaded here if sudo works without a password.
 step "nginx"
-if ssh "$DEPLOY_HOST" "grep -qs '$APP_DIR/nginx/aparat.conf' /etc/nginx/sites-enabled/*"; then
-  if [[ -n $NGINX_CHANGED ]]; then
-    echo "the include changed, reload nginx:"
-    echo "  ssh -t $DEPLOY_HOST 'sudo nginx -t && sudo systemctl reload nginx'"
+LINK=/etc/nginx/sites-enabled/aparat.conf
+INCLUDE="include $NGINX_DIR/aparat-locations.conf;"
+linked=$(ssh "$DEPLOY_HOST" "readlink $LINK" || true)
+included=$(ssh "$DEPLOY_HOST" "grep -lsE '^[[:space:]]*include[[:space:]]+$NGINX_DIR/aparat-locations.conf;' /etc/nginx/sites-enabled/*" || true)
+if [[ $linked == "$NGINX_DIR/aparat.conf" && -n $included ]]; then
+  if [[ -z $NGINX_CHANGED ]]; then
+    echo "set up, config unchanged"
+  elif ssh "$DEPLOY_HOST" 'sudo -n nginx -t -q && sudo -n systemctl reload nginx' 2>/dev/null; then
+    echo "config changed, nginx reloaded"
   else
-    echo "include in place, unchanged"
+    echo "config changed, reload nginx:"
+    echo "  ssh -t $DEPLOY_HOST 'sudo nginx -t && sudo systemctl reload nginx'"
   fi
 else
-  cat <<MSG
-not set up yet. Once, add to the server block of the site in
-/etc/nginx/sites-enabled/ on $DEPLOY_HOST:
-
-    set \$aparat_web $WEB_DIR;
-    include $APP_DIR/nginx/aparat.conf;
-
-then: ssh -t $DEPLOY_HOST 'sudo nginx -t && sudo systemctl reload nginx'
-MSG
+  echo "not set up yet. Once, on $DEPLOY_HOST:"
+  [[ $linked == "$NGINX_DIR/aparat.conf" ]] || echo "
+  sudo ln -s $NGINX_DIR/aparat.conf $LINK"
+  [[ -n $included ]] || echo "
+  add to the server { listen 443 ... } block of the site (velak.klingt.org.conf):
+      $INCLUDE"
+  echo "
+  then: sudo nginx -t && sudo systemctl reload nginx
+  (the symlink first: the locations need what aparat.conf defines)"
 fi
 
 step "check $PUBLIC_URL"
