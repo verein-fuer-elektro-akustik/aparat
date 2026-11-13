@@ -101,46 +101,14 @@ test('leaves no temporary files', async () => {
   assert.ok(files.every((f) => f.endsWith('.json') && !f.startsWith('.')), files.join(' '));
 });
 
-test('serves the frontend with types and no stale caching', async () => {
-  let res = await fetch(`${base}/`);
-  assert.equal(res.status, 200);
-  assert.match(res.headers.get('content-type'), /text\/html/);
-  assert.match(await res.text(), /<title>aparat<\/title>/);
-
-  res = await fetch(`${base}/modules/vco.js`);
-  assert.equal(res.status, 200);
-  assert.match(res.headers.get('content-type'), /text\/javascript/);
-  assert.equal(res.headers.get('cache-control'), 'no-cache');
-
-  res = await fetch(`${base}/test`, { redirect: 'manual' });
-  assert.equal(res.status, 301);
-  assert.equal((await fetch(`${base}/test/`)).status, 200);
-  assert.equal((await fetch(`${base}/nope.js`)).status, 404);
-  assert.equal((await fetch(`${base}/`, { method: 'POST' })).status, 405);
-});
-
-test('does not serve files outside web/', async () => {
-  assert.equal(await raw('/../server/server.js'), 404);
-  assert.equal(await raw('/%2e%2e/server/server.js'), 404);
-  assert.equal(await raw('/..%2fserver%2fserver.js'), 404);
-  assert.equal(await raw('/%00'), 404);
-});
-
-test('serves the app at /preset/:name with a base for relative urls', async () => {
-  for (const path of ['/preset/test', `/preset/${encodeURIComponent('Rückkopplung 1')}`]) {
+test('serves only the api', async () => {
+  for (const path of ['/', '/index.html', '/modules/vco.js', '/preset/test', '/api/nope']) {
     const res = await fetch(base + path);
-    assert.equal(res.status, 200, path);
-    assert.match(res.headers.get('content-type'), /text\/html/);
-    const html = await res.text();
-    assert.match(html, /<head>\n<base href="\.\.\/">/);
-    assert.match(html, /<title>aparat<\/title>/);
+    assert.equal(res.status, 404, path);
+    assert.match(res.headers.get('content-type'), /json/);
   }
-  // the base makes page urls resolve against the app root
-  assert.equal(new URL('ui/main.js', new URL('../', `${base}/preset/test`)).pathname, '/ui/main.js');
-  for (const path of ['/preset/', '/preset/a/b', '/preset']) {
-    assert.equal((await fetch(base + path, { redirect: 'manual' })).status, 404, path);
-  }
-  assert.equal((await fetch(`${base}/preset/test`, { method: 'PUT' })).status, 405);
+  assert.equal(await raw('/api/presets/..%2f..%2fserver'), 400);
+  assert.equal((await fetch(`${base}/api/presets`, { method: 'POST' })).status, 405);
 });
 
 test('serves factory presets until a stored version overrides them', async () => {

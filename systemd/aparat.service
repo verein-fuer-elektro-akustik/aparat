@@ -1,0 +1,31 @@
+# aparat preset API as a systemd user service.
+#
+# deploy.sh fills in @APP_DIR@ and @NODE@ and installs this as
+# ~/.config/systemd/user/aparat.service. By hand:
+#
+#   sed -e "s|@APP_DIR@|$HOME/app/aparat|g" -e "s|@NODE@|$(command -v node)|g" \
+#     systemd/aparat.service > ~/.config/systemd/user/aparat.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now aparat.service
+#   sudo loginctl enable-linger $USER     # once: run without a login, start at boot
+#
+# Logs: journalctl --user -u aparat -f
+# HOST, PORT and PRESETS_DIR come from @APP_DIR@/.env, written from deploy.env.
+
+[Unit]
+Description=aparat preset API
+Documentation=https://velak.klingt.org/aparat/
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=@APP_DIR@
+EnvironmentFile=@APP_DIR@/.env
+ExecStart=@NODE@ @APP_DIR@/server.js
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+UMask=0027
+
+[Install]
+WantedBy=default.target

@@ -1,35 +1,22 @@
-// aparat service: serves the frontend in web/ and stores presets.
+// aparat API: stores presets. The frontend in web/ is static and served by
+// nginx, which proxies /api/ here (see nginx/).
 //
 //   GET    /api/presets          [{ name, updated, factory, stored }]
 //   GET    /api/presets/:name    the patch
 //   PUT    /api/presets/:name    store the patch in the request body
 //   DELETE /api/presets/:name    the stored version (factory presets stay)
-//   GET    /preset/:name         the app, which then loads that preset
 //
 // No dependencies. No authentication, so it listens on 127.0.0.1 unless HOST
 // says otherwise.
 
-import { createReadStream } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { extname, join, resolve, sep } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MAX_BYTES, PresetError, PresetStore } from './presets.js';
 
-const ROOT = fileURLToPath(new URL('..', import.meta.url));
-
-const TYPES = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.ico': 'image/x-icon',
-  '.wav': 'audio/wav',
-  '.woff2': 'font/woff2',
-};
+// Factory presets ship next to this file. Stored presets default to data/presets
+// in the repository; deployed, PRESETS_DIR says where they go.
+const HERE = fileURLToPath(new URL('.', import.meta.url));
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
   const data = typeof body === 'string' ? body : JSON.stringify(body);
@@ -91,54 +78,10 @@ async function api(req, res, store, path) {
   }
 }
 
-async function file(req, res, webDir, pathname) {
-  if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'method not allowed' });
-  let path;
-  try {
-    path = resolve(webDir, `.${decodeURIComponent(pathname)}`);
-  } catch {
-    return send(res, 400, 'bad path', 'text/plain');
-  }
-  if (path !== webDir && !path.startsWith(webDir + sep)) return send(res, 404, 'not found', 'text/plain');
-  let info = await stat(path).catch(() => null);
-  if (info?.isDirectory()) {
-    if (!pathname.endsWith('/')) {
-      res.writeHead(301, { location: `${pathname}/` }).end();
-      return undefined;
-    }
-    path = join(path, 'index.html');
-    info = await stat(path).catch(() => null);
-  }
-  if (!info?.isFile()) return send(res, 404, 'not found', 'text/plain');
-  // no-cache: the browser revalidates, so edited modules are never stale
-  res.writeHead(200, {
-    'content-type': TYPES[extname(path)] ?? 'application/octet-stream',
-    'content-length': info.size,
-    'cache-control': 'no-cache',
-    'last-modified': info.mtime.toUTCString(),
-  });
-  if (req.method === 'HEAD') return res.end();
-  createReadStream(path).pipe(res);
-  return undefined;
-}
-
-// The page at /preset/<name> gets <base href="../"> so its relative urls
-// (styles, modules, worklet, api) resolve against the app root, also when the
-// app sits under a path behind a proxy. The name is read by the page itself.
-async function presetPage(req, res, webDir) {
-  if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'method not allowed' });
-  const html = (await readFile(join(webDir, 'index.html'), 'utf8')).replace(/<head>/i, '<head>\n<base href="../">');
-  res.writeHead(200, { 'content-type': TYPES['.html'], 'cache-control': 'no-cache' });
-  res.end(req.method === 'HEAD' ? undefined : html);
-  return undefined;
-}
-
 export function createService({
-  webDir = join(ROOT, 'web'),
-  presetsDir = join(ROOT, 'data', 'presets'),
-  factoryDir = join(ROOT, 'server', 'presets'),
+  presetsDir = join(HERE, '..', 'data', 'presets'),
+  factoryDir = join(HERE, 'presets'),
 } = {}) {
-  const web = resolve(webDir);
   const store = new PresetStore(resolve(presetsDir), factoryDir ? resolve(factoryDir) : null);
   return createServer(async (req, res) => {
     res.setHeader('x-content-type-options', 'nosniff');
@@ -146,12 +89,8 @@ export function createService({
     try {
       if (pathname === '/api/presets' || pathname.startsWith('/api/presets/')) {
         await api(req, res, store, pathname.slice('/api/presets/'.length));
-      } else if (/^\/preset\/[^/]+$/.test(pathname)) {
-        await presetPage(req, res, web);
-      } else if (pathname.startsWith('/api/')) {
-        send(res, 404, { error: 'not found' });
       } else {
-        await file(req, res, web, pathname);
+        send(res, 404, { error: 'not found' });
       }
     } catch (err) {
       if (res.headersSent) return res.destroy();
@@ -165,9 +104,9 @@ export function createService({
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const host = process.env.HOST ?? '127.0.0.1';
-  const port = Number(process.env.PORT ?? 8000);
+  const port = Number(process.env.PORT ?? 8001);
   const presetsDir = process.env.PRESETS_DIR;
   createService(presetsDir ? { presetsDir } : {}).listen(port, host, () => {
-    console.log(`aparat on http://${host === '0.0.0.0' ? 'localhost' : host}:${port}/`);
+    console.log(`aparat api on http://${host}:${port}/api/`);
   });
 }

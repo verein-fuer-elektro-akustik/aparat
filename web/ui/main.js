@@ -192,7 +192,7 @@ ctx.addEventListener('contextmenu', (e) => e.preventDefault());
 // patches
 //
 // The patch is not kept in the url. The url only names a preset:
-// <app>/preset/<name> loads that preset from the service, which serves the page
+// <app>/preset/<name> loads that preset from the service. nginx serves the page
 // there with <base href="../">, so relative urls keep working.
 
 const appRoot = new URL('.', document.baseURI);
