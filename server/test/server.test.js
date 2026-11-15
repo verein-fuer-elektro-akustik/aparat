@@ -172,7 +172,7 @@ test('ships the factory patches', async () => {
   const at = `http://127.0.0.1:${s.address().port}/api/patches`;
   try {
     const names = (await (await fetch(at)).json()).map((p) => p.name);
-    for (const n of ['drones', 'hardtekno', 'idm']) {
+    for (const n of ['drones', 'acid', 'idm']) {
       assert.ok(names.includes(n), n);
       const file = JSON.parse(await readFile(new URL(`../patches/${n}.json`, import.meta.url), 'utf8'));
       assert.deepEqual(await (await fetch(`${at}/${n}`)).json(), file);
