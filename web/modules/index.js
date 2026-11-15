@@ -58,7 +58,11 @@ import sampler from './sampler.js';
 //   process(s, in, out, p)  one sample; in, out and p are arrays in the
 //                        order of inputs, outputs and params
 //   onMidi(s, data, p)   optional, incoming midi bytes
-//   display(s)           optional, data drawn on the panel at frame rate
+//   display(s)           optional, data drawn on the panel at frame rate: an
+//                        array drawn as a trace (±12), or an object with
+//                        trace or bars (0 to 1, from the bottom) and an
+//                        optional grid {x, y} (lines at 0 to 1 from the left
+//                        and from the bottom)
 //   displayKnob          optional, display() returns the knob to outline
 //   displayText(data)    optional, the lines of text to show for display()'s
 //                        data instead of a trace

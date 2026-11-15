@@ -1075,18 +1075,30 @@ export class Rack {
     }
     const g = c.getContext('2d');
     g.clearRect(0, 0, w, h);
-    g.strokeStyle = '#272727';
-    g.lineWidth = 1;
-    g.beginPath();
-    g.moveTo(0, h / 2);
-    g.lineTo(w, h / 2);
-    g.stroke();
+    const grid = data.grid ?? { x: [], y: [0.5] };
+    g.fillStyle = '#272727';
+    const line = Math.max(1, Math.round(dpr));
+    for (const x of grid.x) g.fillRect(Math.round(x * w), 0, line, h);
+    for (const y of grid.y) g.fillRect(0, Math.round((1 - y) * h), w, line);
+    if (data.bars) {
+      const n = data.bars.length;
+      const gap = Math.max(1, Math.round(dpr));
+      g.fillStyle = '#9c9c9c';
+      for (let i = 0; i < n; i++) {
+        const x0 = Math.round((i / n) * w);
+        const x1 = Math.round(((i + 1) / n) * w) - gap;
+        const bh = Math.round(Math.min(1, Math.max(0, data.bars[i])) * h);
+        if (bh > 0 && x1 > x0) g.fillRect(x0, h - bh, x1 - x0, bh);
+      }
+      return;
+    }
+    const trace = data.trace ?? data;
     g.strokeStyle = '#9c9c9c';
     g.lineWidth = dpr;
     g.beginPath();
-    for (let i = 0; i < data.length; i++) {
-      const x = (i / (data.length - 1)) * w;
-      const y = h / 2 - (data[i] / 12) * (h / 2);
+    for (let i = 0; i < trace.length; i++) {
+      const x = (i / (trace.length - 1)) * w;
+      const y = h / 2 - (trace[i] / 12) * (h / 2);
       if (i) g.lineTo(x, y);
       else g.moveTo(x, y);
     }

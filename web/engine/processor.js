@@ -243,7 +243,9 @@ class Aparat extends AudioWorkletProcessor {
     const displays = [];
     for (const m of this.displayMods) {
       const data = m.def.display(m.state);
-      if (data) displays.push({ id: m.id, data: data.slice() });
+      // postMessage copies objects; an array is sliced so tests without a
+      // real port see a copy too
+      if (data) displays.push({ id: m.id, data: ArrayBuffer.isView(data) ? data.slice() : data });
     }
     this.port.postMessage({
       type: 'frame',
