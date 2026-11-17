@@ -1,3 +1,6 @@
+// Low frequency oscillator. pw sets the width of the square, so it can also
+// give short clock pulses.
+
 const TAU = Math.PI * 2;
 
 export default {
@@ -7,6 +10,7 @@ export default {
   outputs: ['sin', 'tri', 'saw', 'squ'],
   params: {
     rate: { min: 0.01, max: 100, default: 1, curve: 'exp', format: (v) => `${v.toFixed(2)} hz` },
+    pw: { min: 0.05, max: 0.95, default: 0.5, format: (v) => `${Math.round(v * 100)}%` },
   },
   create: (sr) => ({ sr, phase: 0, high: false }),
   process(s, i, o, p) {
@@ -19,6 +23,6 @@ export default {
     o[0] = 5 * Math.sin(TAU * t);
     o[1] = 5 * (4 * Math.abs(t - 0.5) - 1);
     o[2] = 5 * (2 * t - 1);
-    o[3] = t < 0.5 ? 5 : -5;
+    o[3] = t < p[1] ? 5 : -5;
   },
 };

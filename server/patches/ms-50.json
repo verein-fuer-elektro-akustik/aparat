@@ -1,0 +1,377 @@
+{
+  "v": 2,
+  "modules": [
+    {
+      "id": 1,
+      "type": "vco",
+      "x": 0,
+      "row": 0,
+      "params": {
+        "tune": -1,
+        "fm": 0,
+        "pw": 0.5,
+        "fine": 0
+      }
+    },
+    {
+      "id": 2,
+      "type": "vcf",
+      "x": 3,
+      "row": 0,
+      "params": {
+        "cutoff": 500,
+        "res": 0.65,
+        "cv": 0.35
+      }
+    },
+    {
+      "id": 3,
+      "type": "vca",
+      "x": 6,
+      "row": 0,
+      "params": {
+        "gain": 0.9
+      }
+    },
+    {
+      "id": 4,
+      "type": "env",
+      "x": 8,
+      "row": 0,
+      "params": {
+        "a": 0.003,
+        "d": 0.18,
+        "s": 0.3,
+        "r": 0.12
+      }
+    },
+    {
+      "id": 5,
+      "type": "hdar",
+      "x": 10,
+      "row": 0,
+      "params": {
+        "delay": 0.4,
+        "attack": 0.6,
+        "hold": 0.1,
+        "release": 0.8
+      }
+    },
+    {
+      "id": 6,
+      "type": "lfo",
+      "x": 12,
+      "row": 0,
+      "params": {
+        "rate": 5,
+        "pw": 0.25
+      }
+    },
+    {
+      "id": 7,
+      "type": "mixer",
+      "x": 14,
+      "row": 0,
+      "params": {
+        "a": 0.35,
+        "b": 1,
+        "c": 0.02,
+        "d": 0,
+        "master": 1
+      }
+    },
+    {
+      "id": 8,
+      "type": "atten",
+      "x": 18,
+      "row": 0,
+      "params": {
+        "gain1": 1,
+        "gain2": -1,
+        "offset1": 0,
+        "offset2": 0
+      }
+    },
+    {
+      "id": 9,
+      "type": "slew",
+      "x": 20,
+      "row": 0,
+      "params": {
+        "rise": 0.03,
+        "fall": 0.03
+      }
+    },
+    {
+      "id": 10,
+      "type": "meter",
+      "x": 22,
+      "row": 0,
+      "params": {}
+    },
+    {
+      "id": 11,
+      "type": "button",
+      "x": 25,
+      "row": 0,
+      "params": {}
+    },
+    {
+      "id": 12,
+      "type": "vca",
+      "x": 0,
+      "row": 1,
+      "params": {
+        "gain": 1
+      }
+    },
+    {
+      "id": 13,
+      "type": "vca",
+      "x": 2,
+      "row": 1,
+      "params": {
+        "gain": 1
+      }
+    },
+    {
+      "id": 14,
+      "type": "sample hold",
+      "x": 4,
+      "row": 1,
+      "params": {}
+    },
+    {
+      "id": 15,
+      "type": "noise",
+      "x": 6,
+      "row": 1,
+      "params": {}
+    },
+    {
+      "id": 16,
+      "type": "div",
+      "x": 8,
+      "row": 1,
+      "params": {}
+    },
+    {
+      "id": 18,
+      "type": "follow",
+      "x": 11,
+      "row": 1,
+      "params": {
+        "gain": 1,
+        "release": 0.15,
+        "thresh": 2
+      }
+    },
+    {
+      "id": 19,
+      "type": "output",
+      "x": 13,
+      "row": 1,
+      "params": {
+        "first": 1,
+        "level": 0.45
+      }
+    }
+  ],
+  "cables": [
+    {
+      "from": [
+        6,
+        "squ"
+      ],
+      "to": [
+        14,
+        "trig"
+      ]
+    },
+    {
+      "from": [
+        6,
+        "squ"
+      ],
+      "to": [
+        4,
+        "gate"
+      ]
+    },
+    {
+      "from": [
+        6,
+        "squ"
+      ],
+      "to": [
+        16,
+        "clock"
+      ]
+    },
+    {
+      "from": [
+        15,
+        "pink"
+      ],
+      "to": [
+        14,
+        "in"
+      ]
+    },
+    {
+      "from": [
+        14,
+        "out"
+      ],
+      "to": [
+        9,
+        "in"
+      ]
+    },
+    {
+      "from": [
+        9,
+        "out"
+      ],
+      "to": [
+        7,
+        "a"
+      ]
+    },
+    {
+      "from": [
+        8,
+        "1"
+      ],
+      "to": [
+        7,
+        "b"
+      ]
+    },
+    {
+      "from": [
+        7,
+        "out"
+      ],
+      "to": [
+        1,
+        "pitch"
+      ]
+    },
+    {
+      "from": [
+        16,
+        "/4"
+      ],
+      "to": [
+        5,
+        "trig"
+      ]
+    },
+    {
+      "from": [
+        6,
+        "tri"
+      ],
+      "to": [
+        12,
+        "in"
+      ]
+    },
+    {
+      "from": [
+        5,
+        "out"
+      ],
+      "to": [
+        12,
+        "cv"
+      ]
+    },
+    {
+      "from": [
+        12,
+        "out"
+      ],
+      "to": [
+        7,
+        "c"
+      ]
+    },
+    {
+      "from": [
+        1,
+        "saw"
+      ],
+      "to": [
+        2,
+        "in"
+      ]
+    },
+    {
+      "from": [
+        4,
+        "out"
+      ],
+      "to": [
+        2,
+        "cutoff"
+      ]
+    },
+    {
+      "from": [
+        2,
+        "lp"
+      ],
+      "to": [
+        3,
+        "in"
+      ]
+    },
+    {
+      "from": [
+        4,
+        "out"
+      ],
+      "to": [
+        3,
+        "cv"
+      ]
+    },
+    {
+      "from": [
+        3,
+        "out"
+      ],
+      "to": [
+        19,
+        "1"
+      ]
+    },
+    {
+      "from": [
+        3,
+        "out"
+      ],
+      "to": [
+        19,
+        "2"
+      ]
+    },
+    {
+      "from": [
+        9,
+        "out"
+      ],
+      "to": [
+        10,
+        "in"
+      ]
+    }
+  ],
+  "midiMap": [],
+  "midi": {
+    "in": "",
+    "out": ""
+  }
+}

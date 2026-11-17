@@ -540,8 +540,10 @@ export class Rack {
           def: list[i],
           value: m.values[i],
           onChange: (v) => {
-            m.values[i] = v;
             this.send({ op: 'param', id: m.id, i, v });
+            // a push button plays, it does not change the patch
+            if (list[i].momentary) return;
+            m.values[i] = v;
             this.onChange();
           },
           onLearn: () => this.armLearn(m, i),

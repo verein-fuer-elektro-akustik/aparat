@@ -92,6 +92,19 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
     if (e.button !== 0) return;
     e.preventDefault();
     el.focus({ focusVisible: false });
+    if (def.momentary) {
+      // on while held, wherever the pointer goes
+      el.setPointerCapture(e.pointerId);
+      setNorm(1);
+      const release = () => {
+        setNorm(0);
+        el.removeEventListener('pointerup', release);
+        el.removeEventListener('pointercancel', release);
+      };
+      el.addEventListener('pointerup', release);
+      el.addEventListener('pointercancel', release);
+      return;
+    }
     if (toggle) {
       setNorm(current === 1 ? 0 : 1);
       return;
@@ -115,6 +128,10 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
     el.addEventListener('pointercancel', up);
   });
 
+  el.addEventListener('keyup', (e) => {
+    if (def.momentary && (e.key === ' ' || e.key === 'Enter')) setNorm(0);
+  });
+
   el.addEventListener('dblclick', () => {
     if (!toggle) setNorm(toNorm(def, def.default));
   });
@@ -123,7 +140,8 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
     if (toggle && (e.key === ' ' || e.key === 'Enter')) {
       e.preventDefault();
       e.stopPropagation();
-      setNorm(current === 1 ? 0 : 1);
+      if (def.momentary) setNorm(1);
+      else setNorm(current === 1 ? 0 : 1);
       return;
     }
     const stepSize = def.step ? 1 / ((def.max - def.min) / def.step) : e.shiftKey ? 0.002 : 0.02;

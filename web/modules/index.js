@@ -45,6 +45,9 @@ import chorus from './chorus.js';
 import phaser from './phaser.js';
 import meter from './meter.js';
 import sampler from './sampler.js';
+import hdar from './hdar.js';
+import follow from './follow.js';
+import button from './button.js';
 
 // A module is a plain object, imported by both the UI and the audio worklet,
 // so it must not touch the DOM:
@@ -53,7 +56,9 @@ import sampler from './sampler.js';
 //   inputs               {name: value while unpatched}
 //   outputs              [names]
 //   params               {name: {min, max, default, step?, curve?, format?}};
-//                        min 0, max 1, step 1 shows as an on/off button
+//                        min 0, max 1, step 1 shows as an on/off button;
+//                        with momentary: true it is on only while held, and
+//                        not stored in the patch
 //   create(sr, host)     the state; host has in (sound card), out, midi()
 //   process(s, in, out, p)  one sample; in, out and p are arrays in the
 //                        order of inputs, outputs and params
@@ -79,12 +84,12 @@ import sampler from './sampler.js';
 // menu lists them by name)
 export const defs = [
   vco, lfo, noise, chaos, sampler,
-  clock, div, seq, steps, euclid, chance, env, seqSwitch,
+  clock, div, seq, steps, euclid, chance, env, hdar, seqSwitch, button,
   kick, hat, clap,
   vcf, vca, mixer, matrix, pan, xfade, fold, drive, crush, slew, sampleHold, quant,
   delay, reverb, chorus, phaser, granular,
   atten, logic, compare, scope, meter, note,
-  input, output,
+  input, follow, output,
   midiIn, midiCcIn, midiClockIn, midiOut, midiCcOut, midiClockOut,
 ];
 

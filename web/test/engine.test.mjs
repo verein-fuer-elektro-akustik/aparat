@@ -269,6 +269,64 @@ test('meter reads level and pitch, vco sync follows the master', () => {
   assert.ok(diff < 0.02, `synced: ${diff}`);
 });
 
+// runs a module definition directly, without the engine and its dc blocking
+function run(def, params = {}) {
+  const p = Object.entries(def.params).map(([k, d]) => params[k] ?? d.default);
+  const s = def.create(SR, {});
+  const o = new Float64Array(def.outputs.length);
+  return {
+    p,
+    // seconds with these input values, returns the outputs at the end
+    for(seconds, ...inputs) {
+      for (let n = Math.round(seconds * SR); n > 0; n--) def.process(s, inputs, o, p);
+      return [...o];
+    },
+  };
+}
+
+test('button, hdar: a short press gives a delayed, held envelope', () => {
+  const b = run(registry.button);
+  b.p[0] = 1;
+  assert.deepEqual(b.for(0.001), [10, 10]);
+  assert.deepEqual(b.for(0.01), [10, 0]); // trig is a short pulse, gate stays
+  b.p[0] = 0;
+  assert.deepEqual(b.for(0.001), [0, 0]);
+
+  const h = run(registry.hdar, { delay: 0.1, attack: 0.1, hold: 0.1, release: 0.1 });
+  h.for(0.01, 10); // a short trigger
+  assert.deepEqual(h.for(0.05, 0), [0, -0, 0]); // 0.06 s: still in the delay
+  const [rising, , dtrig] = h.for(0.1, 0); // 0.16 s: on the way up
+  assert.ok(rising > 4 && rising < 7 && dtrig === 10, `attack ${rising} ${dtrig}`);
+  assert.deepEqual(h.for(0.1, 0), [10, -10, 10]); // 0.26 s: held at the top
+  assert.ok(h.for(0.5, 0)[0] < 0.01); // 0.76 s: released
+  // while the gate is held, it stays up
+  h.for(0.6, 10);
+  assert.equal(h.for(0.6, 10)[0], 10);
+});
+
+test('follow turns loudness into a cv and a gate', () => {
+  const f = run(registry.follow, { thresh: 3 });
+  const tone = (seconds, amp) => {
+    let last;
+    for (let n = 0; n < seconds * SR; n++) last = f.for(1 / SR, amp * Math.sin((2 * Math.PI * 220 * n) / SR));
+    return last;
+  };
+  const [, env, gate] = tone(0.2, 5);
+  assert.ok(env > 9 && env <= 10 && gate === 10, `loud ${env} ${gate}`);
+  const [, quiet, closed] = tone(1, 0.5);
+  assert.ok(quiet < 1.2 && closed === 0, `quiet ${quiet} ${closed}`);
+});
+
+test('lfo pulse width', () => {
+  const e = engine({
+    modules: [{ id: 1, type: 'lfo', params: { rate: 10, pw: 0.2 } }, { id: 2, type: 'output', params: { level: 0.2 } }],
+    cables: out(2, [1, 'squ']),
+  });
+  const a = e.render(1);
+  const high = a.filter((v) => v > 0).length / a.length;
+  assert.ok(Math.abs(high - 0.2) < 0.01, `high ${high}`);
+});
+
 // The factory patches live with the server. "default" is what the app starts
 // with; "new patch" in the menu is the same patch from web/ui/new-patch.js,
 // which also works without the server. They must not drift apart.
