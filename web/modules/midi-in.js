@@ -54,6 +54,7 @@ function allocate(key, n, d, on) {
 
 export default {
   name: 'midi in',
+  doc: 'Notes from midi or the computer keyboard as pitch, gate and velocity, plus mod wheel and pitch bend. For chords, set voice and of.',
   cols: 3,
   inputs: {},
   outputs: ['pitch', 'gate', 'vel', 'mod', 'bend'],

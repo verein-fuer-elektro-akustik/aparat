@@ -9,6 +9,7 @@ const RMS = 1.9; // volts, the level of the pink output
 
 export default {
   name: 'noise',
+  doc: 'White, pink and brown noise.',
   cols: 2,
   inputs: {},
   outputs: ['white', 'pink', 'brown'],

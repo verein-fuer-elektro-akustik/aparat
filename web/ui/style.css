@@ -202,6 +202,14 @@ label.menu-row { justify-content: space-between; gap: 1rem; }
   padding: .15rem .3rem;
 }
 #library button:hover, #library button:focus-visible, #library button.first { background: var(--panel-out); color: var(--f-high); outline: none; }
+#doc {
+  padding: .4rem .7rem .5rem;
+  border-top: 1px solid var(--edge);
+  color: var(--f-med);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-y: auto;
+}
 .hints {
   list-style: none;
   padding: .4rem .7rem .5rem;

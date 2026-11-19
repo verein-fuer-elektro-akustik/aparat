@@ -1,5 +1,6 @@
 export default {
   name: 'fold',
+  doc: 'Wavefolder: the louder the signal, the more it folds back on itself. Bright, west coast tones.',
   cols: 2,
   inputs: { in: 0, drive: 0 },
   outputs: ['out'],

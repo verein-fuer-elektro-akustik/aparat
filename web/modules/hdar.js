@@ -17,6 +17,7 @@ const RELEASE = 4;
 
 export default {
   name: 'hdar',
+  doc: 'Delay, attack, hold, release envelope. A trigger starts the delay, dtrig fires when the attack begins, inv is the envelope upside down.',
   cols: 2,
   inputs: { trig: 0 },
   outputs: ['out', 'inv', 'dtrig'],

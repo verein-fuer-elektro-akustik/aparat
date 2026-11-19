@@ -3,6 +3,7 @@
 
 export default {
   name: 'switch',
+  doc: 'Sequential switch: passes one of four inputs and moves to the next on each clock pulse.',
   cols: 3,
   inputs: { 1: 0, 2: 0, 3: 0, 4: 0, clock: 0, reset: 0 },
   outputs: ['out'],

@@ -2,6 +2,7 @@ const level = { min: 0, max: 1, default: 0.8 };
 
 export default {
   name: 'mixer',
+  doc: 'Four channel mixer with a master level, for audio and control voltages.',
   cols: 4,
   inputs: { a: 0, b: 0, c: 0, d: 0 },
   outputs: ['out'],

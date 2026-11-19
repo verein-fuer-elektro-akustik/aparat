@@ -1,5 +1,6 @@
 export default {
   name: 'sample hold',
+  doc: 'Sample and hold: each trigger takes the input voltage and holds it. Noise in gives random steps.',
   cols: 2,
   inputs: { in: 0, trig: 0 },
   outputs: ['out'],

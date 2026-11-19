@@ -9,6 +9,7 @@ for (let n = 0; n <= WINDOW; n++) hann[n] = 0.5 - 0.5 * Math.cos((2 * Math.PI * 
 
 export default {
   name: 'granular',
+  doc: 'Granular: records its input and replays short overlapping grains of it, at the position and pitch you set.',
   cols: 3,
   inputs: { in: 0, pos: 0, pitch: 0 },
   outputs: ['out'],

@@ -8,6 +8,7 @@ const FREQS = [205.3, 304.4, 369.6, 522.7, 540, 800];
 
 export default {
   name: 'hat',
+  doc: 'Hi-hat: metallic noise with a decay, short for closed, long for open.',
   cols: 2,
   inputs: { trig: 0, decay: 0 },
   outputs: ['out'],

@@ -7,6 +7,7 @@ const db = (v) => (v > 1e-4 ? `${(20 * Math.log10(v / 5)).toFixed(1)} db` : '-in
 
 export default {
   name: 'meter',
+  doc: 'Level meter and tuner: peak and rms level and the pitch of a signal.',
   cols: 3,
   inputs: { in: 0 },
   outputs: ['thru'],

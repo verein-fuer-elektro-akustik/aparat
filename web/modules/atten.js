@@ -6,6 +6,7 @@ const offset = { min: -10, max: 10, default: 0, format: (v) => `${v.toFixed(2)} 
 
 export default {
   name: 'atten',
+  doc: 'Two attenuverters: out = in × gain + offset. Negative gain inverts; with nothing patched, the offset alone is a constant voltage.',
   cols: 2,
   inputs: { 1: 0, 2: 0 },
   outputs: ['1', '2'],

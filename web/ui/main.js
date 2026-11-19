@@ -460,11 +460,34 @@ async function addModule(name) {
   if (name === 'input') await audio.openInput();
 }
 
+// The description of the module in focus (or under the pointer, or the first
+// match of the search) replaces the hints below the list.
+// It takes the hints' height, so the menu does not jump.
+function showDoc(def) {
+  const doc = $('doc');
+  const hints = menu.querySelector('.hints');
+  if (def && !hints.hidden) doc.style.height = `${hints.offsetHeight}px`;
+  doc.textContent = def?.doc ?? '';
+  doc.hidden = !def;
+  hints.hidden = !!def;
+}
+
 for (const def of [...defs].sort((a, b) => a.name.localeCompare(b.name))) {
   const button = document.createElement('button');
   button.textContent = def.name;
   button.addEventListener('click', guarded(() => addModule(def.name)));
+  button.addEventListener('focus', () => showDoc(def));
+  button.addEventListener('pointerenter', () => showDoc(def));
+  button.addEventListener('pointerleave', () => showDoc(focusedDef()));
+  button.def = def;
   $('library').append(button);
+}
+
+// the def of the focused or highlighted button, if any
+function focusedDef() {
+  const lib = $('library');
+  if (lib.contains(document.activeElement)) return document.activeElement.def;
+  return lib.querySelector('button.first')?.def ?? null;
 }
 
 function filterMenu() {
@@ -476,6 +499,7 @@ function filterMenu() {
     if (!b.hidden && !first) first = b;
   }
   if (q) first?.classList.add('first');
+  showDoc(focusedDef());
   return first;
 }
 
@@ -497,6 +521,7 @@ function closeMenu() {
 }
 
 search.addEventListener('input', filterMenu);
+search.addEventListener('focus', () => showDoc(focusedDef()));
 search.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') filterMenu()?.click();
   if (e.key === 'ArrowDown') {

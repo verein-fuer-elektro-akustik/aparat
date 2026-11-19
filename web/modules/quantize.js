@@ -33,6 +33,7 @@ function quantize(v, scale, root) {
 
 export default {
   name: 'quant',
+  doc: 'Quantizer: snaps a pitch voltage to the nearest note of a scale. trig pulses when the note changes.',
   cols: 2,
   inputs: { in: 0 },
   outputs: ['out', 'trig'],

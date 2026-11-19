@@ -2,6 +2,7 @@ const SENDS_PER_SECOND = 100;
 
 export default {
   name: 'midi cc out',
+  doc: 'Sends a voltage from 0 to 10 V as a midi controller (cc).',
   cols: 2,
   inputs: { in: 0 },
   outputs: ['thru'],

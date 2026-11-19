@@ -5,6 +5,7 @@ import { seed, svf, svfTick, tanG, white } from './lib/dsp.js';
 
 export default {
   name: 'clap',
+  doc: 'Hand clap: three quick bursts of filtered noise and a tail, on each trigger.',
   cols: 2,
   inputs: { trig: 0 },
   outputs: ['out'],

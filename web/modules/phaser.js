@@ -5,6 +5,7 @@ const TAU = Math.PI * 2;
 
 export default {
   name: 'phaser',
+  doc: 'Phaser: swept all-pass stages mixed with the dry sound; feedback sharpens the notches.',
   cols: 3,
   inputs: { in: 0, cv: 0 },
   outputs: ['out'],

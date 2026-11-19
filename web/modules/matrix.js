@@ -8,6 +8,7 @@ for (const out of [1, 2, 3, 4]) {
 
 export default {
   name: 'matrix',
+  doc: '4×4 mixer with bipolar gains: each output mixes all four inputs. Made for feedback networks.',
   cols: 4,
   inputs: { a: 0, b: 0, c: 0, d: 0 },
   outputs: ['1', '2', '3', '4'],

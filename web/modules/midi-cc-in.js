@@ -2,6 +2,7 @@ import { pole } from './lib/dsp.js';
 
 export default {
   name: 'midi cc in',
+  doc: 'A midi controller (cc) as a voltage from 0 to 10 V.',
   cols: 2,
   inputs: {},
   outputs: ['out'],

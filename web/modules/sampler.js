@@ -6,6 +6,7 @@
 
 export default {
   name: 'sampler',
+  doc: 'Plays an audio file, loaded with the button or dropped on the panel. A trigger starts it, pitch follows 1 V/oct, loop repeats a part.',
   cols: 3,
   inputs: { trig: 0, pitch: 0 },
   outputs: ['out', 'end'],

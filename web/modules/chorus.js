@@ -7,6 +7,7 @@ const SWEEP = 0.006;
 
 export default {
   name: 'chorus',
+  doc: 'Chorus: two slowly swept delay lines thicken a sound. Mono in, stereo out.',
   cols: 3,
   inputs: { in: 0 },
   outputs: ['l', 'r'],

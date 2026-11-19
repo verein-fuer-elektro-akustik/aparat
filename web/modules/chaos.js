@@ -2,6 +2,7 @@
 
 export default {
   name: 'chaos',
+  doc: 'Lorenz attractor: three swirling voltages that never repeat. Slow for modulation, fast for audio.',
   cols: 3,
   inputs: { rate: 0 },
   outputs: ['x', 'y', 'z'],

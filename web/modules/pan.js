@@ -3,6 +3,7 @@
 
 export default {
   name: 'pan',
+  doc: 'Equal-power pan, mono to stereo. The cv moves it, 5 V from the middle to one side.',
   cols: 2,
   inputs: { in: 0, pan: 0 },
   outputs: ['l', 'r'],

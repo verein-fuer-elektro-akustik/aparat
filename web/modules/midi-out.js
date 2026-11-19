@@ -9,6 +9,7 @@ function noteOff(s) {
 
 export default {
   name: 'midi out',
+  doc: 'Sends a midi note while the gate is high.',
   cols: 3,
   inputs: { pitch: 0, gate: 0, vel: 8 },
   outputs: ['pitch', 'gate', 'vel'],

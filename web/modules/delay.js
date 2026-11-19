@@ -6,6 +6,7 @@ const MAX_SECONDS = 4;
 
 export default {
   name: 'delay',
+  doc: 'Echo with feedback. A clock patched to sync makes the echoes follow the tempo.',
   cols: 3,
   inputs: { in: 0, time: 0, fb: 0, sync: 0 },
   outputs: ['out'],

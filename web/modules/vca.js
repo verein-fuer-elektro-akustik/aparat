@@ -2,6 +2,7 @@
 
 export default {
   name: 'vca',
+  doc: 'Amplifier: the cv sets the level, 10 V is full. A bipolar cv makes it a ring modulator.',
   cols: 2,
   inputs: { in: 0, cv: 10 },
   outputs: ['out'],

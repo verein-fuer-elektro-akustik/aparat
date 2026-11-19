@@ -21,6 +21,7 @@ function euclidHit(step, n, h, r) {
 
 export default {
   name: 'euclid',
+  doc: 'Four euclidean rhythms: hits spread evenly over len steps, rotated by rot. Different lengths run polymetric.',
   cols: 4,
   inputs: { clock: 0, reset: 0, h1: 0, h2: 0, h3: 0, h4: 0 },
   outputs: ['1', '2', '3', '4'],

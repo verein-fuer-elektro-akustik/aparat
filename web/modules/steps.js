@@ -12,6 +12,7 @@ params.len = { min: 1, max: 16, default: 16, step: 1, format: (v) => `${v}` };
 
 export default {
   name: 'steps',
+  doc: 'Sixteen step trigger sequencer: lit steps send a gate. len shortens the loop, end marks the last step.',
   cols: 4,
   inputs: { clock: 0, reset: 0 },
   outputs: ['gate', 'end'],

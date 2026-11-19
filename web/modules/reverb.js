@@ -29,6 +29,7 @@ function side(s, x, combs, alls, fb, damp) {
 
 export default {
   name: 'reverb',
+  doc: 'Reverb, from a room to a hall. Mono in, stereo out.',
   cols: 3,
   inputs: { in: 0 },
   outputs: ['l', 'r'],

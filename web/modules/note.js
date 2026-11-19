@@ -3,6 +3,7 @@
 
 export default {
   name: 'note',
+  doc: 'A text note to label a patch. No sound; the text is kept with the patch.',
   cols: 4,
   inputs: {},
   outputs: [],

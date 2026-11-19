@@ -2,6 +2,7 @@
 
 export default {
   name: 'logic',
+  doc: 'Gate logic: and, or, xor of two gates, and not a.',
   cols: 2,
   inputs: { a: 0, b: 0 },
   outputs: ['and', 'or', 'xor', 'not a'],

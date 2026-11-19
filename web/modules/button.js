@@ -4,6 +4,7 @@
 
 export default {
   name: 'button',
+  doc: 'A push button: gate is high while it is held, trig is a short pulse when it is pressed. For firing envelopes by hand.',
   cols: 2,
   inputs: {},
   outputs: ['gate', 'trig'],

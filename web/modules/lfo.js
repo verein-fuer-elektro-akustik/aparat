@@ -5,6 +5,7 @@ const TAU = Math.PI * 2;
 
 export default {
   name: 'lfo',
+  doc: 'Low frequency oscillator: sine, triangle, saw and square; pw sets the width of the square.',
   cols: 2,
   inputs: { rate: 0, reset: 0 },
   outputs: ['sin', 'tri', 'saw', 'squ'],

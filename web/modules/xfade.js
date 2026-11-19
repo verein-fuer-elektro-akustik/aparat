@@ -2,6 +2,7 @@
 
 export default {
   name: 'xfade',
+  doc: 'Crossfade from a to b. The cv adds to the knob, 10 V is all the way.',
   cols: 2,
   inputs: { a: 0, b: 0, mix: 0 },
   outputs: ['out'],

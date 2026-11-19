@@ -15,6 +15,7 @@ const time = (def) => ({
 
 export default {
   name: 'env',
+  doc: 'ADSR envelope: rises while the gate is high, holds at sustain, falls when it ends. 0 to 10 V.',
   cols: 2,
   inputs: { gate: 0 },
   outputs: ['out'],

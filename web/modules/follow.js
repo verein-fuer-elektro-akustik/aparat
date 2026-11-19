@@ -7,6 +7,7 @@ import { pole } from './lib/dsp.js';
 
 export default {
   name: 'follow',
+  doc: 'Envelope follower: the loudness of a sound becomes a voltage (env), and gate is high while it is louder than thresh.',
   cols: 2,
   inputs: { in: 0 },
   outputs: ['out', 'env', 'gate'],

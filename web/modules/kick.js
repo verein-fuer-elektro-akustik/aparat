@@ -9,6 +9,7 @@ const sec = (min, max, def) => ({ min, max, default: def, curve: 'exp', format: 
 
 export default {
   name: 'kick',
+  doc: 'Kick drum: a sine with a fast pitch sweep, a click and drive.',
   cols: 3,
   inputs: { trig: 0, pitch: 0, decay: 0 },
   outputs: ['out'],

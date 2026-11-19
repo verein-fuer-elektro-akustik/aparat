@@ -65,6 +65,11 @@ const edges = (a, level = 0.1) => {
 };
 const out = (id, from, to = ['1']) => to.map((ch) => ({ from, to: [id, ch] }));
 
+test('every module has a name and a doc', () => {
+  for (const d of defs) assert.ok(d.name && typeof d.doc === 'string' && d.doc.length > 10, d.name);
+  assert.equal(new Set(defs.map((d) => d.name)).size, defs.length);
+});
+
 test('every module runs with any setting without producing nan', () => {
   let seed = 1;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;

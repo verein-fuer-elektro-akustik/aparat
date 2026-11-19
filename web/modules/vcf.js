@@ -4,6 +4,7 @@ import { svf, svfTick, tanG } from './lib/dsp.js';
 
 export default {
   name: 'vcf',
+  doc: 'Resonant 12 dB filter with lowpass, bandpass and highpass outputs. cv sets how far the cutoff input moves it.',
   cols: 3,
   inputs: { in: 0, cutoff: 0, res: 0 },
   outputs: ['lp', 'bp', 'hp'],

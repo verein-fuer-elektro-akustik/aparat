@@ -9,6 +9,7 @@ const pct = (v) => `${Math.round(v * 100)}%`;
 
 export default {
   name: 'clock',
+  doc: 'Master clock in bpm, with gates for bars, quarters, eighths and sixteenths and swing. Starting or a reset sends a reset pulse for the sequencers.',
   cols: 3,
   inputs: { run: 10, reset: 0 },
   outputs: ['bar', '4th', '8th', '16th', 'reset'],

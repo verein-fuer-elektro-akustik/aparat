@@ -5,6 +5,7 @@
 
 export default {
   name: 'div',
+  doc: 'Clock divider and multiplier: passes every 2nd, 3rd, 4th or 8th pulse, or fits 2 or 4 pulses into each one.',
   cols: 3,
   inputs: { clock: 0, reset: 0 },
   outputs: ['/2', '/3', '/4', '/8', 'x2', 'x4'],

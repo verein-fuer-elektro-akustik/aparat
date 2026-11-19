@@ -56,6 +56,7 @@ function fft(re, im) {
 
 export default {
   name: 'scope',
+  doc: 'Oscilloscope; with fft on, a frequency analyser.',
   cols: 4,
   inputs: { in: 0 },
   outputs: ['thru'],

@@ -18,6 +18,7 @@ function blep(t, dt) {
 
 export default {
   name: 'vco',
+  doc: 'Oscillator: sine, triangle, saw and square, 1 V/oct pitch, fm, pulse width and hard sync.',
   cols: 3,
   inputs: { pitch: 0, fm: 0, pw: 0, sync: 0 },
   outputs: ['sin', 'tri', 'saw', 'squ'],

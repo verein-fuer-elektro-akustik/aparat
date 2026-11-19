@@ -53,6 +53,7 @@ import button from './button.js';
 // so it must not touch the DOM:
 //
 //   name, cols           menu name, panel width in grid cells
+//   doc                  a sentence or two for the add-module menu
 //   inputs               {name: value while unpatched}
 //   outputs              [names]
 //   params               {name: {min, max, default, step?, curve?, format?}};

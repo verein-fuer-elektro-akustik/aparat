@@ -1,5 +1,6 @@
 export default {
   name: 'midi clock out',
+  doc: 'Sends a clock and start and stop as midi clock.',
   cols: 3,
   inputs: { clock: 0, start: 0, stop: 0 },
   outputs: ['clock', 'start', 'stop'],

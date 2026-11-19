@@ -5,6 +5,7 @@ import { seed, white } from './lib/dsp.js';
 
 export default {
   name: 'chance',
+  doc: 'A coin toss on every gate: with probability prob the gate goes to a, otherwise to b. The prob input adds 10% per volt.',
   cols: 2,
   inputs: { in: 0, prob: 0 },
   outputs: ['a', 'b'],

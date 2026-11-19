@@ -4,6 +4,7 @@
 
 export default {
   name: 'crush',
+  doc: 'Bit crusher: lowers the sample rate and the bit depth, for digital grit.',
   cols: 2,
   inputs: { in: 0, rate: 0, bits: 0 },
   outputs: ['out'],

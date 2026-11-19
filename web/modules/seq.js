@@ -6,6 +6,7 @@ const step = { min: -2, max: 2, default: 0 };
 
 export default {
   name: 'seq',
+  doc: 'Eight step pitch sequencer: each clock pulse moves one step. quant rounds the steps to semitones.',
   cols: 4,
   inputs: { clock: 0, reset: 0 },
   outputs: ['pitch', 'gate'],

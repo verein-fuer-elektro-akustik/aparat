@@ -2,6 +2,7 @@ const PULSE_SECONDS = 0.002;
 
 export default {
   name: 'midi clock in',
+  doc: 'Clock, start and stop from incoming midi clock.',
   cols: 3,
   inputs: {},
   outputs: ['clock', 'start', 'stop'],

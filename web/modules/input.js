@@ -3,6 +3,7 @@
 
 export default {
   name: 'input',
+  doc: 'Sound card input, four channels from first. Asks for microphone access.',
   cols: 2,
   inputs: {},
   outputs: ['1', '2', '3', '4'],

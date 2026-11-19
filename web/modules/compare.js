@@ -3,6 +3,7 @@
 
 export default {
   name: 'compare',
+  doc: 'Comparator: above is high while the input is above ref + level, below while it is not. Turns lfos and envelopes into gates.',
   cols: 2,
   inputs: { in: 0, ref: 0 },
   outputs: ['above', 'below'],

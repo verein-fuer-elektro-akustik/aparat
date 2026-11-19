@@ -5,6 +5,7 @@ import { pole } from './lib/dsp.js';
 
 export default {
   name: 'drive',
+  doc: 'Distortion: soft saturation, bias for even harmonics, a tone control and an output level.',
   cols: 2,
   inputs: { in: 0, drive: 0 },
   outputs: ['out'],

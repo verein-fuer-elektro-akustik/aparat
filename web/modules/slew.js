@@ -7,6 +7,7 @@ const time = { min: 0.0005, max: 2, default: 0.05, curve: 'exp', format: (v) => 
 
 export default {
   name: 'slew',
+  doc: 'Slew limiter: smooths jumps, with separate rise and fall times. On a pitch it gives portamento.',
   cols: 2,
   inputs: { in: 0 },
   outputs: ['out'],
