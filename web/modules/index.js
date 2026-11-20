@@ -68,10 +68,12 @@ import button from './button.js';
 //                        array drawn as a trace (±12), or an object with
 //                        trace or bars (0 to 1, from the bottom) and an
 //                        optional grid {x, y} (lines at 0 to 1 from the left
-//                        and from the bottom)
+//                        and from the bottom); or {steps: [rows]}, rows of
+//                        steps drawn as cells (bit 1 lit, 2 current, 4 firing)
 //   displayKnob          optional, display() returns the knob to outline
 //   displayText(data)    optional, the lines of text to show for display()'s
 //                        data instead of a trace
+//   displayHeight        optional, the display's height in px (110)
 //   file                 optional, the panel can load an audio file, which
 //                        arrives as onData(s, {samples, sr}) (null: none)
 //   text                 optional, the panel is a text field kept in the patch

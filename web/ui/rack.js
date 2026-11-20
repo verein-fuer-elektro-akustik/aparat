@@ -532,6 +532,7 @@ export class Rack {
     if (def.display && !def.displayKnob) {
       m.canvas = document.createElement('canvas');
       m.canvas.className = 'display';
+      if (def.displayHeight) m.canvas.style.height = `${def.displayHeight}px`;
       el.append(m.canvas);
     }
 
@@ -1038,6 +1039,33 @@ export class Rack {
 
   // displays
 
+  // rows of steps, each row stretched over the width: unlit steps small,
+  // lit ones filled, the current one outlined, bright while it fires
+  drawSteps(g, w, h, rows, dpr) {
+    const rh = h / rows.length;
+    const pad = Math.max(1, Math.round(dpr));
+    rows.forEach((row, r) => {
+      const cw = w / row.length;
+      const y = Math.round(r * rh + pad);
+      const ch = Math.round(rh - 2 * pad);
+      for (let k = 0; k < row.length; k++) {
+        const v = row[k];
+        const x = Math.round(k * cw + pad);
+        const cwk = Math.max(1, Math.round((k + 1) * cw - pad) - x);
+        if (v & 4) g.fillStyle = colours['f-high'];
+        else if (v & 1) g.fillStyle = colours['f-low'];
+        else g.fillStyle = colours.edge;
+        if (v & 1 || v & 4) g.fillRect(x, y, cwk, ch);
+        else g.fillRect(x, y + Math.round(ch / 2) - pad, cwk, 2 * pad);
+        if (v & 2) {
+          g.strokeStyle = colours['f-high'];
+          g.lineWidth = pad;
+          g.strokeRect(x + pad / 2, y + pad / 2, cwk - pad, ch - pad);
+        }
+      }
+    });
+  }
+
   redrawDisplays() {
     for (const m of this.modules.values()) if (m.shown) this.drawDisplay(m.id, m.shown);
   }
@@ -1086,6 +1114,10 @@ export class Rack {
     }
     const g = c.getContext('2d');
     g.clearRect(0, 0, w, h);
+    if (data.steps) {
+      this.drawSteps(g, w, h, data.steps, dpr);
+      return;
+    }
     const grid = data.grid ?? { x: [], y: [0.5] };
     g.fillStyle = colours.edge;
     const line = Math.max(1, Math.round(dpr));

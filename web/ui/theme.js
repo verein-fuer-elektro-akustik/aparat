@@ -7,7 +7,7 @@
 // shows without a flash of the other theme.
 
 const KEY = 'aparat.theme';
-const NAMES = ['f-high', 'edge', 'cable-base', 'cable-signal', 'halo'];
+const NAMES = ['f-high', 'f-med', 'f-low', 'edge', 'cable-base', 'cable-signal', 'halo'];
 
 export const colours = {};
 const listeners = [];
