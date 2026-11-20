@@ -40,6 +40,7 @@ const rack = new Rack({
     ['duplicate', duplicateSelection],
     ['copy', copySelection],
     ['remove', removeSelection],
+    ['help', () => openHelp(`m-${m.type.replace(/\s+/g, '-')}`)],
   ]),
 });
 const recorder = makeRecorder({ audio, button: $('record') });
@@ -271,8 +272,10 @@ function markSaved() {
 function patchChanged() {
   const changed = dirty();
   const name = patchFromPath();
-  $('patchCurrent').textContent = `${name ?? ''}${changed ? ' *' : ''}`;
+  // the header shows the patch's name, also in the browser tab
+  $('patchCurrent').textContent = `${name ?? 'untitled'}${changed ? ' *' : ''}`;
   $('patchCurrent').title = changed ? 'changed since it was loaded or stored' : 'loaded patch';
+  document.title = `${name ?? 'untitled'}${changed ? ' *' : ''} · aparat`;
   try {
     if (changed) {
       localStorage.setItem('aparat.autosave', JSON.stringify({ name, patch: currentPatch() }));
@@ -696,6 +699,13 @@ async function importPatch(file) {
   showPatchInUrl(null);
   markSaved();
 }
+// help: help.html in its own tab, the same one each time, at a section or a
+// module (help.js gives module entries the ids m-<name>)
+function openHelp(id) {
+  window.open(`help.html#${id}`, 'aparat-help')?.focus();
+}
+for (const b of document.querySelectorAll('[data-help]')) b.addEventListener('click', () => openHelp(b.dataset.help));
+
 // settings: light or dark, or as the system says
 $('theme').value = getTheme();
 $('theme').addEventListener('change', (e) => setTheme(e.target.value));
@@ -873,6 +883,10 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     rack.select(null);
     rack.cables.selected = null;
+    return;
+  }
+  if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    openHelp('start');
     return;
   }
   if (keys.keydown(e)) {

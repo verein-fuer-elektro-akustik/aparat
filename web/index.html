@@ -6,13 +6,14 @@
 <title>aparat</title>
 <meta name="description" content="aparat, a modular synthesizer in the browser: patch oscillators, filters, sequencers and effects with cables.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="ui/colours.css">
 <link rel="stylesheet" href="ui/style.css">
 <!-- the stored theme before the first paint, see ui/theme.js -->
 <script>try{const t=localStorage.getItem('aparat.theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch{}</script>
 </head>
 <body>
 <header>
-  <h1>aparat</h1>
+  <h1 id="patchCurrent" title="loaded patch">aparat</h1>
   <nav id="menubar" aria-label="main menu">
     <div class="menu" data-menu="patch">
       <button class="menu-title" aria-haspopup="menu" aria-expanded="false">patch</button>
@@ -91,13 +92,23 @@
         <label class="menu-row">theme <select id="theme" aria-label="theme"><option value="system">system</option><option value="light">light</option><option value="dark">dark</option></select></label>
       </div>
     </div>
+    <div class="menu" data-menu="help">
+      <button class="menu-title" aria-haspopup="menu" aria-expanded="false">help</button>
+      <div class="menu-items" role="menu" hidden>
+        <button role="menuitem" data-help="start">getting started <kbd>?</kbd></button>
+        <button role="menuitem" data-help="concepts">signals and voltages</button>
+        <button role="menuitem" data-help="rack">modules and cables</button>
+        <button role="menuitem" data-help="patches">patches</button>
+        <button role="menuitem" data-help="keys">keyboard and mouse</button>
+        <button role="menuitem" data-help="modules">all modules</button>
+      </div>
+    </div>
   </nav>
   <span class="group">
     <button id="add" title="shift+a">+ module</button>
     <button id="start">start</button>
     <button id="record">record</button>
   </span>
-  <span id="patchCurrent" title="loaded patch"></span>
   <span class="status">
     <span id="zoomLevel" title="zoom"></span>
     <span id="channels">off</span>
@@ -125,13 +136,14 @@
     <li>drag jacks to patch, pull a cable off a jack to move or remove it</li>
     <li>ctrl-drag a jack for another cable</li>
     <li>double-click a knob to reset, right-click it for midi learn</li>
-    <li>right-click a module: random, reset, duplicate, copy, remove</li>
+    <li>right-click a module: random, reset, duplicate, copy, remove, help</li>
     <li>right-click empty space opens this menu</li>
     <li>shift-click modules or shift-drag empty space to select several</li>
     <li>delete removes the selected modules or cable</li>
     <li>the keys a w s e d f… play notes, z and x change the octave</li>
     <li>drag empty space or middle-drag to move the view</li>
     <li>ctrl+wheel, pinch or + − 0 zoom the rack</li>
+    <li>? opens the help</li>
   </ul>
 </div>
 <script type="module" src="ui/main.js"></script>

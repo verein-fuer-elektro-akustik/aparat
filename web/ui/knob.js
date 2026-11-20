@@ -14,7 +14,7 @@ function fromNorm(def, n) {
   return Math.min(def.max, Math.max(def.min, v));
 }
 
-function formatValue(def, v) {
+export function formatValue(def, v) {
   return def.format ? def.format(v) : v.toFixed(2);
 }
 

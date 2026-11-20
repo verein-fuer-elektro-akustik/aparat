@@ -81,18 +81,20 @@ import button from './button.js';
 // Voltages follow VCV Rack: audio ±5 V, 1 V/oct, gates and triggers 10 V
 // (read as high above 1 V).
 
-// sources, timing, drums, shaping, effects, utilities, i/o (the add-module
-// menu lists them by name)
-export const defs = [
-  vco, lfo, noise, chaos, sampler,
-  clock, div, seq, steps, euclid, chance, env, hdar, seqSwitch, button,
-  kick, hat, clap,
-  vcf, vca, mixer, matrix, pan, xfade, fold, drive, crush, slew, sampleHold, quant,
-  delay, reverb, chorus, phaser, granular,
-  atten, logic, compare, scope, meter, note,
-  input, follow, output,
-  midiIn, midiCcIn, midiClockIn, midiOut, midiCcOut, midiClockOut,
+// The modules by kind, as the help page lists them (the add-module menu
+// lists them by name).
+export const groups = [
+  ['sources', [vco, lfo, noise, chaos, sampler]],
+  ['timing and envelopes', [clock, div, seq, steps, euclid, chance, env, hdar, seqSwitch, button]],
+  ['drums', [kick, hat, clap]],
+  ['filters, mixing and shaping', [vcf, vca, mixer, matrix, pan, xfade, fold, drive, crush, slew, sampleHold, quant]],
+  ['effects', [delay, reverb, chorus, phaser, granular]],
+  ['utilities', [atten, logic, compare, scope, meter, note]],
+  ['sound card', [input, follow, output]],
+  ['midi', [midiIn, midiCcIn, midiClockIn, midiOut, midiCcOut, midiClockOut]],
 ];
+
+export const defs = groups.flatMap(([, list]) => list);
 
 // A module with a `bypass` map ({output: input}) gets an on/off bypass
 // parameter. While it is on, the engine copies those inputs straight to the
