@@ -74,6 +74,15 @@ import button from './button.js';
 //   displayText(data)    optional, the lines of text to show for display()'s
 //                        data instead of a trace
 //   displayHeight        optional, the display's height in px (110)
+//   shape(p, live, peaks)  optional, what the display shows, worked out in
+//                        the page from the knobs (p) and the last display()
+//                        data (live, null while audio is off), so it follows
+//                        the knobs also without sound. peaks: the waveform of
+//                        a file module's file. Returns a display object as
+//                        above, or {curve, marks, dot} (a line 0 to 1 from
+//                        the bottom, vertical lines, a point [x, y]), or
+//                        {wave, from, to, head} (min/max pairs, the bright
+//                        part, a playhead, all 0 to 1 across)
 //   file                 optional, the panel can load an audio file, which
 //                        arrives as onData(s, {samples, sr}) (null: none)
 //   text                 optional, the panel is a text field kept in the patch

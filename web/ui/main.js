@@ -472,6 +472,7 @@ async function stopAudio() {
   recorder.stop();
   await audio.stop();
   cables.clearLevels();
+  rack.clearLive();
   $('start').textContent = 'start';
   $('start').classList.remove('on');
   $('channels').textContent = 'off';

@@ -20,6 +20,30 @@ function div(className, parent) {
   return el;
 }
 
+// A waveform as 512 min/max pairs, for drawing; worked out once per file.
+const peakCache = new WeakMap();
+function peaksOf(samples) {
+  let peaks = peakCache.get(samples);
+  if (peaks) return peaks;
+  const n = 512;
+  peaks = new Float32Array(2 * n);
+  const per = samples.length / n;
+  for (let k = 0; k < n; k++) {
+    let lo = 0;
+    let hi = 0;
+    const end = Math.min(samples.length, Math.ceil((k + 1) * per));
+    for (let i = Math.floor(k * per); i < end; i++) {
+      const v = samples[i];
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    peaks[2 * k] = lo;
+    peaks[2 * k + 1] = hi;
+  }
+  peakCache.set(samples, peaks);
+  return peaks;
+}
+
 export class Rack {
   constructor({ scroller, sizer, content, cables, send, onChange, onContextMenu, files, onFile }) {
     this.onContextMenu = onContextMenu ?? (() => {});
@@ -285,6 +309,8 @@ export class Rack {
     this.zoom = z;
     this.cables.zoom = z;
     this.content.style.transform = z === 1 ? '' : `scale(${z})`;
+    // displays draw at the zoomed size, to stay sharp
+    for (const m of this.modules.values()) if (m.canvas) this.queuePaint(m);
     this.updateExtent();
     this.scroller.scrollLeft = px * z - ax;
     this.scroller.scrollTop = py * z - ay;
@@ -301,6 +327,8 @@ export class Rack {
     if (!m.def.file) return;
     const file = m.data?.name ? this.files.get(m.data.name) : undefined;
     this.send({ op: 'data', id: m.id, data: file ?? null });
+    m.peaks = file ? peaksOf(file.samples) : null;
+    if (m.def.shape) this.queuePaint(m);
     if (m.fileButton) {
       m.fileButton.textContent = m.data?.name ? `${m.data.name}${file ? '' : ' (missing)'}` : 'load file…';
       m.fileButton.title = m.data?.name && !file ? 'this file is not in this browser, click to load it again' : '';
@@ -406,6 +434,7 @@ export class Rack {
         m.knobs[i].setValue(v);
         this.send({ op: 'param', id: m.id, i, v });
       });
+      if (m.def.shape) this.queuePaint(m);
     }
     const key = (a, i, b, j) => `${a}:${i}>${b}:${j}`;
     const wanted = new Map();
@@ -529,11 +558,12 @@ export class Rack {
       });
     }
 
-    if (def.display && !def.displayKnob) {
+    if ((def.display && !def.displayKnob) || def.shape) {
       m.canvas = document.createElement('canvas');
       m.canvas.className = 'display';
       if (def.displayHeight) m.canvas.style.height = `${def.displayHeight}px`;
       el.append(m.canvas);
+      if (def.shape) this.queuePaint(m);
     }
 
     if (m.keys.length) {
@@ -546,6 +576,7 @@ export class Rack {
           value: m.values[i],
           onChange: (v) => {
             this.send({ op: 'param', id: m.id, i, v });
+            if (m.def.shape) this.queuePaint(m);
             // a push button plays, it does not change the patch
             if (list[i].momentary) return;
             m.values[i] = v;
@@ -1039,6 +1070,64 @@ export class Rack {
 
   // displays
 
+  // a line from 0 (bottom) to 1, with vertical marks and a dot on it
+  drawCurve(g, w, h, { curve, marks = [], dot }, dpr) {
+    const line = Math.max(1, Math.round(dpr));
+    const pad = 4 * dpr; // room for the dot at the top and bottom
+    const y = (v) => h - pad - v * (h - 2 * pad);
+    g.fillStyle = colours.edge;
+    for (const x of marks) g.fillRect(Math.round(x * w), 0, line, h);
+    g.strokeStyle = colours['f-high'];
+    g.lineWidth = dpr;
+    g.beginPath();
+    for (let i = 0; i < curve.length; i++) {
+      const x = (i / (curve.length - 1)) * w;
+      if (i) g.lineTo(x, y(curve[i]));
+      else g.moveTo(x, y(curve[i]));
+    }
+    g.stroke();
+    if (dot) {
+      g.fillStyle = colours['f-high'];
+      g.beginPath();
+      g.arc(dot[0] * w, y(dot[1]), 3 * dpr, 0, 2 * Math.PI);
+      g.fill();
+    }
+  }
+
+  // a waveform from min/max pairs, brighter between from and to, with a
+  // playhead
+  drawWave(g, w, h, { wave, from, to, head }, dpr) {
+    const line = Math.max(1, Math.round(dpr));
+    g.fillStyle = colours.edge;
+    g.fillRect(0, Math.round(h / 2), w, line);
+    if (!wave) return;
+    const n = wave.length / 2;
+    const mid = h / 2;
+    for (let x = 0; x < w; x += line) {
+      // the peaks under this column
+      const a = Math.floor((x / w) * n);
+      const b = Math.max(a + 1, Math.floor(((x + line) / w) * n));
+      let lo = 1;
+      let hi = -1;
+      for (let k = a; k < b && k < n; k++) {
+        lo = Math.min(lo, wave[2 * k]);
+        hi = Math.max(hi, wave[2 * k + 1]);
+      }
+      if (hi < lo) continue;
+      const u = x / w;
+      g.fillStyle = u >= from && u <= to ? colours['f-high'] : colours['f-low'];
+      const top = Math.round(mid - hi * mid * 0.95);
+      g.fillRect(x, top, line, Math.max(line, Math.round(mid - lo * mid * 0.95) - top));
+    }
+    g.fillStyle = colours['f-med'];
+    g.fillRect(Math.round(from * w), 0, line, h);
+    g.fillRect(Math.min(w - line, Math.round(to * w)), 0, line, h);
+    if (head !== null && head !== undefined) {
+      g.fillStyle = colours['f-high'];
+      g.fillRect(Math.round(head * w), 0, 2 * line, h);
+    }
+  }
+
   // rows of steps, each row stretched over the width: unlit steps small,
   // lit ones filled, the current one outlined, bright while it fires
   drawSteps(g, w, h, rows, dpr) {
@@ -1067,7 +1156,29 @@ export class Rack {
   }
 
   redrawDisplays() {
-    for (const m of this.modules.values()) if (m.shown) this.drawDisplay(m.id, m.shown);
+    for (const m of this.modules.values()) if (m.canvas) this.paint(m);
+  }
+
+  // audio stopped: the displays drop what the engine last sent (playheads,
+  // envelope dots); shapes stay
+  clearLive() {
+    for (const m of this.modules.values()) {
+      m.live = null;
+      if (m.def.shape) this.paint(m);
+    }
+  }
+
+  // one paint per module and frame, however many changes come in
+  queuePaint(m) {
+    this.toPaint ??= new Set();
+    if (!this.toPaint.size) {
+      requestAnimationFrame(() => {
+        const list = [...this.toPaint];
+        this.toPaint.clear();
+        for (const one of list) this.paint(one);
+      });
+    }
+    this.toPaint.add(m);
   }
 
   drawText(m, lines) {
@@ -1098,7 +1209,16 @@ export class Rack {
       return;
     }
     if (!m?.canvas) return;
-    m.shown = data; // drawn again in the new colours on a theme change
+    m.live = data; // also drawn again on a theme change, zoom or knob turn
+    this.paint(m);
+  }
+
+  // Draws a module's display: its shape() from the knobs and the live data,
+  // or the live data itself.
+  paint(m) {
+    if (!m.canvas || this.modules.get(m.id) !== m) return;
+    const data = m.def.shape ? m.def.shape(m.values, m.live ?? null, m.peaks ?? null) : m.live;
+    if (!data) return;
     const c = m.canvas;
     if (m.def.displayText) {
       this.drawText(m, m.def.displayText(data));
@@ -1116,6 +1236,14 @@ export class Rack {
     g.clearRect(0, 0, w, h);
     if (data.steps) {
       this.drawSteps(g, w, h, data.steps, dpr);
+      return;
+    }
+    if (data.curve) {
+      this.drawCurve(g, w, h, data, dpr);
+      return;
+    }
+    if ('wave' in data) {
+      this.drawWave(g, w, h, data, dpr);
       return;
     }
     const grid = data.grid ?? { x: [], y: [0.5] };

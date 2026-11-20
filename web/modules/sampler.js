@@ -3,6 +3,9 @@
 // sends a pulse when the sound is over. With loop on it repeats the part
 // between start and start + length. The file is kept in this browser and is
 // not part of the patch, which only remembers its name.
+//
+// The panel shows the file's waveform, the part between start and
+// start + length brighter, and the playhead while it plays.
 
 export default {
   name: 'sampler',
@@ -18,7 +21,7 @@ export default {
     loop: { min: 0, max: 1, default: 0, step: 1, format: (v) => (v ? 'on' : 'off') },
   },
   file: true,
-  create: (sr) => ({ sr, buf: null, rate: 1, pos: -1, high: false, pulse: 0 }),
+  create: (sr) => ({ sr, buf: null, rate: 1, pos: -1, high: false, pulse: 0, head: new Float32Array(1), shown: -2 }),
   // data: { samples: Float32Array (mono, -1..1), sr }
   onData(s, data) {
     s.buf = data?.samples ?? null;
@@ -61,5 +64,22 @@ export default {
     let step = s.rate * Math.pow(2, i[1] + p[0]);
     if (step > 64) step = 64;
     s.pos += step;
+  },
+  // [playhead, 0 to 1 in the file], -1 while stopped; only when it moved
+  display(s) {
+    const head = s.buf && s.pos >= 0 ? s.pos / Math.max(1, s.buf.length - 1) : -1;
+    if (head === s.shown) return null;
+    s.shown = head;
+    s.head[0] = head;
+    return s.head;
+  },
+  // peaks: the loaded file's waveform from the panel (min, max pairs)
+  shape(p, live, peaks) {
+    return {
+      wave: peaks,
+      from: p[1],
+      to: Math.min(1, p[1] + p[2]),
+      head: live && live[0] >= 0 ? live[0] : null,
+    };
   },
 };
