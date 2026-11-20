@@ -1197,13 +1197,15 @@ export class Rack {
 
   // displays
 
-  // a line from 0 (bottom) to 1, with vertical marks and a dot on it
-  drawCurve(g, w, h, { curve, marks = [], dot }, dpr) {
+  // a line from 0 (bottom) to 1, with vertical marks, horizontal lines and
+  // a dot on it
+  drawCurve(g, w, h, { curve, marks = [], lines = [], dot }, dpr) {
     const line = Math.max(1, Math.round(dpr));
     const pad = 4 * dpr; // room for the dot at the top and bottom
     const y = (v) => h - pad - v * (h - 2 * pad);
     g.fillStyle = colours.edge;
     for (const x of marks) g.fillRect(Math.round(x * w), 0, line, h);
+    for (const v of lines) g.fillRect(0, Math.round(y(v)), w, line);
     g.strokeStyle = colours['f-high'];
     g.lineWidth = dpr;
     g.beginPath();

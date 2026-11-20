@@ -293,6 +293,46 @@ function run(def, params = {}) {
   };
 }
 
+// the gain in dB the eq gives a sine of frequency f
+function eqGain(params, f) {
+  const def = registry.eq;
+  const p = Object.entries(def.params).map(([k, d]) => params[k] ?? d.default);
+  const s = def.create(SR, {});
+  const o = new Float64Array(1);
+  let peak = 0;
+  const n = SR; // one second, the second half measured
+  for (let k = 0; k < n; k++) {
+    def.process(s, [5 * Math.sin((2 * Math.PI * f * k) / SR)], o, p);
+    if (k > n / 2) peak = Math.max(peak, Math.abs(o[0]));
+  }
+  return 20 * Math.log10(peak / 5);
+}
+
+test('eq: flat passes the signal, each band boosts and cuts its own range', () => {
+  for (const f of [50, 1000, 12000]) assert.ok(Math.abs(eqGain({}, f)) < 0.05, `flat at ${f}`);
+  const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) < tol, `${what}: ${a.toFixed(2)} dB`);
+  near(eqGain({ 'low g': 12 }, 30), 12, 0.5, 'low shelf below');
+  near(eqGain({ 'low g': 12 }, 5000), 0, 0.3, 'low shelf far above');
+  near(eqGain({ 'high g': -12 }, 18000), -12, 1, 'high shelf above');
+  near(eqGain({ 'high g': -12 }, 100), 0, 0.3, 'high shelf far below');
+  near(eqGain({ 'lm g': 9, 'lm f': 400 }, 400), 9, 0.3, 'peak at its frequency');
+  near(eqGain({ 'lm g': 9, 'lm f': 400, 'lm q': 4 }, 2000), 0, 0.5, 'narrow peak far away');
+  near(eqGain({ 'hm g': -15, 'hm f': 3000 }, 3000), -15, 0.5, 'cut at its frequency');
+});
+
+test('eq: the drawn response matches what it does', () => {
+  const def = registry.eq;
+  const params = { 'low g': 6, 'lm g': -9, 'hm g': 4, 'high g': -3 };
+  const p = Object.entries(def.params).map(([k, d]) => params[k] ?? d.default);
+  const { curve } = def.shape(p);
+  for (const f of [40, 400, 2500, 10000]) {
+    const j = Math.round((Math.log(f / 20) / Math.log(1000)) * (curve.length - 1));
+    const drawn = (curve[j] - 0.5) * 36;
+    const fj = 20 * Math.pow(1000, j / (curve.length - 1));
+    assert.ok(Math.abs(drawn - eqGain(params, fj)) < 0.6, `${f} hz: drawn ${drawn.toFixed(2)}, measured ${eqGain(params, fj).toFixed(2)}`);
+  }
+});
+
 test('button, hdar: a short press gives a delayed, held envelope', () => {
   const b = run(registry.button);
   b.p[0] = 1;

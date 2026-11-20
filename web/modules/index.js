@@ -5,6 +5,7 @@ import chaos from './chaos.js';
 import seq from './seq.js';
 import env from './env.js';
 import vcf from './vcf.js';
+import eq from './eq.js';
 import vca from './vca.js';
 import mixer from './mixer.js';
 import matrix from './matrix.js';
@@ -79,8 +80,9 @@ import button from './button.js';
 //                        data (live, null while audio is off), so it follows
 //                        the knobs also without sound. peaks: the waveform of
 //                        a file module's file. Returns a display object as
-//                        above, or {curve, marks, dot} (a line 0 to 1 from
-//                        the bottom, vertical lines, a point [x, y]), or
+//                        above, or {curve, marks, lines, dot} (a line 0 to 1
+//                        from the bottom, vertical lines, horizontal lines,
+//                        a point [x, y]), or
 //                        {wave, from, to, head} (min/max pairs, the bright
 //                        part, a playhead, all 0 to 1 across)
 //   file                 optional, the panel can load an audio file, which
@@ -98,7 +100,7 @@ export const groups = [
   ['sources', [vco, lfo, noise, chaos, sampler]],
   ['timing and envelopes', [clock, div, seq, steps, euclid, chance, env, hdar, seqSwitch, button]],
   ['drums', [kick, hat, clap]],
-  ['filters, mixing and shaping', [vcf, vca, mixer, matrix, pan, xfade, fold, drive, crush, slew, sampleHold, quant]],
+  ['filters, mixing and shaping', [vcf, eq, vca, mixer, matrix, pan, xfade, fold, drive, crush, slew, sampleHold, quant]],
   ['effects', [delay, reverb, chorus, phaser, granular]],
   ['utilities', [atten, logic, compare, scope, meter, note]],
   ['sound card', [input, follow, output]],
