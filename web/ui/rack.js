@@ -1,5 +1,6 @@
 import { registry } from '../modules/index.js';
 import { makeKnob } from './knob.js';
+import { colours } from './theme.js';
 
 // The rack is a grid of square cells. A module is CELLS cells tall, so the
 // rack is made of rows CELLS cells high. A module is as many cells wide as it
@@ -520,8 +521,11 @@ export class Rack {
       el.append(button);
       el.addEventListener('dragover', (e) => e.preventDefault());
       el.addEventListener('drop', (e) => {
+        const file = e.dataTransfer.files[0];
+        // a patch file is left to the window, which loads it
+        if (!file || /\.json$/i.test(file.name)) return;
         e.preventDefault();
-        if (e.dataTransfer.files[0]) this.onFile(m, e.dataTransfer.files[0]);
+        this.onFile(m, file);
       });
     }
 
@@ -1034,6 +1038,10 @@ export class Rack {
 
   // displays
 
+  redrawDisplays() {
+    for (const m of this.modules.values()) if (m.shown) this.drawDisplay(m.id, m.shown);
+  }
+
   drawText(m, lines) {
     const c = m.canvas;
     const dpr = (devicePixelRatio || 1) * this.zoom;
@@ -1045,7 +1053,7 @@ export class Rack {
     }
     const g = c.getContext('2d');
     g.clearRect(0, 0, w, h);
-    g.fillStyle = '#9c9c9c';
+    g.fillStyle = colours['f-high'];
     g.font = `${11 * dpr}px "JetBrains Mono", monospace`;
     g.textBaseline = 'middle';
     lines.forEach((line, i) => g.fillText(line, 8 * dpr, ((i + 0.5) * h) / lines.length));
@@ -1062,6 +1070,7 @@ export class Rack {
       return;
     }
     if (!m?.canvas) return;
+    m.shown = data; // drawn again in the new colours on a theme change
     const c = m.canvas;
     if (m.def.displayText) {
       this.drawText(m, m.def.displayText(data));
@@ -1078,14 +1087,14 @@ export class Rack {
     const g = c.getContext('2d');
     g.clearRect(0, 0, w, h);
     const grid = data.grid ?? { x: [], y: [0.5] };
-    g.fillStyle = '#272727';
+    g.fillStyle = colours.edge;
     const line = Math.max(1, Math.round(dpr));
     for (const x of grid.x) g.fillRect(Math.round(x * w), 0, line, h);
     for (const y of grid.y) g.fillRect(0, Math.round((1 - y) * h), w, line);
     if (data.bars) {
       const n = data.bars.length;
       const gap = Math.max(1, Math.round(dpr));
-      g.fillStyle = '#9c9c9c';
+      g.fillStyle = colours['f-high'];
       for (let i = 0; i < n; i++) {
         const x0 = Math.round((i / n) * w);
         const x1 = Math.round(((i + 1) / n) * w) - gap;
@@ -1095,7 +1104,7 @@ export class Rack {
       return;
     }
     const trace = data.trace ?? data;
-    g.strokeStyle = '#9c9c9c';
+    g.strokeStyle = colours['f-high'];
     g.lineWidth = dpr;
     g.beginPath();
     for (let i = 0; i < trace.length; i++) {

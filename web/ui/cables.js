@@ -1,6 +1,9 @@
 // One canvas above the panels. Every cable changes on every frame, so it is
 // redrawn whole. Alpha values are bucketed to keep the number of strokes small.
 
+// colours follows the theme; the cables are drawn every frame anyway
+import { colours } from './theme.js';
+
 const SEGMENTS = 32;
 const BUCKETS = 8;
 const BASE = 0.12;
@@ -48,11 +51,18 @@ export class CableLayer {
     requestAnimationFrame(loop);
   }
 
+  // Setting the canvas size clears it, and resize observers run after this
+  // frame's draw, so draw again at once: otherwise every step of a window
+  // resize shows a frame without cables.
   resize() {
     const dpr = devicePixelRatio || 1;
+    const w = Math.round(this.canvas.clientWidth * dpr);
+    const h = Math.round(this.canvas.clientHeight * dpr);
+    if (w === this.canvas.width && h === this.canvas.height && dpr === this.dpr) return;
     this.dpr = dpr;
-    this.canvas.width = Math.round(this.canvas.clientWidth * dpr);
-    this.canvas.height = Math.round(this.canvas.clientHeight * dpr);
+    this.canvas.width = w;
+    this.canvas.height = h;
+    this.draw(performance.now() / 1000);
   }
 
   add(cable) {
@@ -149,12 +159,12 @@ export class CableLayer {
     }
 
     ctx.lineWidth = 2;
-    ctx.strokeStyle = `rgba(128, 128, 128, ${BASE + 0.25})`;
+    ctx.strokeStyle = `rgba(${colours['cable-base']}, ${BASE + 0.25})`;
     ctx.stroke(base);
 
     ctx.lineWidth = 2.5;
     for (let b = 0; b < BUCKETS; b++) {
-      ctx.strokeStyle = `rgba(200, 200, 200, ${(b + 1) / BUCKETS})`;
+      ctx.strokeStyle = `rgba(${colours['cable-signal']}, ${(b + 1) / BUCKETS})`;
       ctx.stroke(buckets[b]);
     }
 
@@ -168,9 +178,10 @@ export class CableLayer {
         for (let i = 1; i <= SEGMENTS; i++) path.lineTo(c.pts[i * 2], c.pts[i * 2 + 1]);
         return path;
       });
-      // dark halo first, so a lit cable reads clearly where it crosses others
+      // a halo in the background colour first, so a lit cable reads clearly
+      // where it crosses others
       ctx.lineWidth = 7;
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+      ctx.strokeStyle = `rgba(${colours.halo}, 0.75)`;
       for (const path of lit) ctx.stroke(path);
       ctx.lineWidth = 3.5;
       lit.forEach((path, k) => {
@@ -185,7 +196,7 @@ export class CableLayer {
       ctx.moveTo(g[0], g[1]);
       for (let i = 1; i <= SEGMENTS; i++) ctx.lineTo(g[i * 2], g[i * 2 + 1]);
       ctx.lineWidth = 2;
-      ctx.strokeStyle = '#9c9c9c';
+      ctx.strokeStyle = colours['f-high'];
       ctx.stroke();
     }
   }

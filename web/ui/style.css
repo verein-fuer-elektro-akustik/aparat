@@ -9,9 +9,12 @@
   font-display: swap;
 }
 
-/* colours from velak.klingt.org */
+/* colours from velak.klingt.org. Dark unless the system asks for light;
+   data-theme (see ui/theme.js) overrides the system either way. The cable
+   colours are r, g, b for the canvas. */
 :root {
   --mono: "JetBrains Mono", monospace;
+  --cell: 48px;
   --background: #0c0c0c;
   --panel: #181818;
   --panel-out: #111111;
@@ -21,7 +24,48 @@
   --f-high: #9c9c9c;
   --accent: #ed2c3e;
   --grid: #151515;
-  --cell: 48px;
+  --shadow: #000;
+  --tint: #ffffff0d;
+  --cable-base: 128, 128, 128;
+  --cable-signal: 200, 200, 200;
+  --halo: 0, 0, 0;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --background: #f3f3f3;
+    --panel: #e3e3e3;
+    --panel-out: #ebebeb;
+    --edge: #cbcbcb;
+    --f-low: #9b9b9b;
+    --f-med: #6a6a6a;
+    --f-high: #383838;
+    --accent: #e0182c;
+    --grid: #e8e8e8;
+    --shadow: #0004;
+    --tint: #0000000d;
+    --cable-base: 120, 120, 120;
+    --cable-signal: 40, 40, 40;
+    --halo: 255, 255, 255;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --background: #f3f3f3;
+  --panel: #e3e3e3;
+  --panel-out: #ebebeb;
+  --edge: #cbcbcb;
+  --f-low: #9b9b9b;
+  --f-med: #6a6a6a;
+  --f-high: #383838;
+  --accent: #e0182c;
+  --grid: #e8e8e8;
+  --shadow: #0004;
+  --tint: #0000000d;
+  --cable-base: 120, 120, 120;
+  --cable-signal: 40, 40, 40;
+  --halo: 255, 255, 255;
+  color-scheme: light;
 }
 
 [hidden] { display: none !important; }
@@ -83,7 +127,7 @@ button.on { background: var(--f-high); color: var(--background); }
   padding: .25rem;
   background: var(--panel);
   border: 1px solid var(--f-low);
-  box-shadow: 0 8px 32px #000;
+  box-shadow: 0 8px 32px var(--shadow);
 }
 .menu-items button {
   display: flex;
@@ -140,7 +184,7 @@ label.menu-row { justify-content: space-between; gap: 1rem; }
   color: var(--f-high);
   font-family: var(--mono);
   text-transform: none;
-  box-shadow: 0 6px 24px #000;
+  box-shadow: 0 6px 24px var(--shadow);
   cursor: pointer;
   overflow-wrap: anywhere;
 }
@@ -156,7 +200,7 @@ label.menu-row { justify-content: space-between; gap: 1rem; }
   max-height: min(36rem, calc(100vh - 1rem));
   background: var(--panel);
   border: 1px solid var(--f-low);
-  box-shadow: 0 8px 32px #000;
+  box-shadow: 0 8px 32px var(--shadow);
 }
 #ctx {
   position: fixed;
@@ -165,7 +209,7 @@ label.menu-row { justify-content: space-between; gap: 1rem; }
   padding: .25rem;
   background: var(--panel);
   border: 1px solid var(--f-low);
-  box-shadow: 0 8px 32px #000;
+  box-shadow: 0 8px 32px var(--shadow);
 }
 #ctxTitle { padding: .15rem .4rem .3rem; color: var(--f-low); border-bottom: 1px solid var(--edge); margin-bottom: .2rem; }
 #ctxItems button {
@@ -218,6 +262,25 @@ label.menu-row { justify-content: space-between; gap: 1rem; }
   font-size: 10px;
 }
 
+/* shown while files are dragged over the window; lets the events through */
+#dropzone {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--f-high);
+  background: color-mix(in srgb, var(--background) 55%, transparent);
+}
+#dropzone[hidden] { display: none; }
+#dropzone span {
+  padding: .5rem .9rem;
+  background: var(--panel);
+  border: 1px solid var(--f-low);
+  color: var(--f-high);
+}
 #stage { position: relative; flex: 1; min-width: 0; min-height: 0; }
 #rack {
   position: absolute;
@@ -254,7 +317,7 @@ button:disabled { color: var(--f-low); cursor: default; border-color: var(--edge
 }
 body.panning, body.panning * { cursor: grabbing !important; }
 .drop { position: absolute; border: 1px dashed var(--f-low); pointer-events: none; }
-.band { position: absolute; z-index: 2; border: 1px solid var(--f-med); background: #ffffff0d; pointer-events: none; }
+.band { position: absolute; z-index: 2; border: 1px solid var(--f-med); background: var(--tint); pointer-events: none; }
 #cables { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
 .module {
@@ -276,7 +339,7 @@ body.panning, body.panning * { cursor: grabbing !important; }
   pointer-events: none;
 }
 .module.selected::after { border-color: var(--accent); }
-.module.dragging { z-index: 1; opacity: .85; box-shadow: 0 6px 24px #000; }
+.module.dragging { z-index: 1; opacity: .85; box-shadow: 0 6px 24px var(--shadow); }
 .module.dragging .title { cursor: grabbing; }
 
 .title {

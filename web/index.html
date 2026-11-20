@@ -7,6 +7,8 @@
 <meta name="description" content="aparat, a modular synthesizer in the browser: patch oscillators, filters, sequencers and effects with cables.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="ui/style.css">
+<!-- the stored theme before the first paint, see ui/theme.js -->
+<script>try{const t=localStorage.getItem('aparat.theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch{}</script>
 </head>
 <body>
 <header>
@@ -67,6 +69,9 @@
       <div class="menu-items" role="menu" hidden>
         <label class="menu-row">output <select id="device" aria-label="output device"><option value="">system default</option></select></label>
         <button id="devices" role="menuitem" data-keep title="asks for microphone permission, needed to show device names">show device names</button>
+        <hr>
+        <label class="menu-row" title="the sound card's rate, or another one the browser converts to it; higher rates alias less and cost more cpu, lower ones sound duller and save cpu">sample rate <select id="rate" aria-label="sample rate"><option value="0">sound card</option><option value="8000">8000 hz</option><option value="11025">11025 hz</option><option value="16000">16000 hz</option><option value="22050">22050 hz</option><option value="24000">24000 hz</option><option value="32000">32000 hz</option><option value="44100">44100 hz</option><option value="48000">48000 hz</option><option value="88200">88200 hz</option><option value="96000">96000 hz</option></select></label>
+        <label class="menu-row" title="a larger buffer helps against crackles; the browser picks the nearest size it can do, the header shows what you got">latency <select id="latency" aria-label="latency"><option value="low">low</option><option value="balanced">balanced</option><option value="safe">safe</option><option value="5">5 ms</option><option value="10">10 ms</option><option value="20">20 ms</option><option value="40">40 ms</option><option value="80">80 ms</option><option value="160">160 ms</option></select></label>
       </div>
     </div>
     <div class="menu" data-menu="midi">
@@ -78,6 +83,12 @@
           <label class="menu-row">in <select id="midiIn" aria-label="midi input"></select></label>
           <label class="menu-row">out <select id="midiOut" aria-label="midi output"></select></label>
         </div>
+      </div>
+    </div>
+    <div class="menu" data-menu="settings">
+      <button class="menu-title" aria-haspopup="menu" aria-expanded="false">settings</button>
+      <div class="menu-items" role="menu" hidden>
+        <label class="menu-row">theme <select id="theme" aria-label="theme"><option value="system">system</option><option value="light">light</option><option value="dark">dark</option></select></label>
       </div>
     </div>
   </nav>
@@ -95,6 +106,7 @@
   </span>
 </header>
 <div id="error" role="alert"></div>
+<div id="dropzone" hidden><span></span></div>
 <div id="stage">
   <div id="rack"><div id="sizer"><div id="content"></div></div></div>
   <canvas id="cables"></canvas>

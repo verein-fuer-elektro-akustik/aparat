@@ -73,7 +73,9 @@ test('every module has a name and a doc', () => {
 test('every module runs with any setting without producing nan', () => {
   let seed = 1;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (let round = 0; round < 3; round++) {
+  // at the default rate, and at the lowest and highest in the audio menu
+  for (const [round, rate] of [[0, SR], [1, SR], [2, SR], [3, 8000], [4, 11025], [5, 96000]]) {
+    globalThis.sampleRate = rate;
     const modules = defs.map((d, i) => ({
       id: i + 1,
       type: d.name,
@@ -89,9 +91,10 @@ test('every module runs with any setting without producing nan', () => {
       Object.keys(registry[m.type].inputs).map((name) => ({ from: sources[Math.floor(rnd() * sources.length)], to: [m.id, name] })));
     const e = engine({ modules, cables });
     const a = e.render(0.5);
-    assert.ok(a.every(Number.isFinite), `round ${round}`);
+    assert.ok(a.every(Number.isFinite), `round ${round} at ${rate} hz`);
     assert.ok(peak(a) <= 1.0001);
   }
+  globalThis.sampleRate = SR;
 });
 
 test('the new patch is silent until a note arrives, then plays it', () => {

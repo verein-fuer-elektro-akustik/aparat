@@ -10,6 +10,7 @@ import { makeKeys } from './keys.js';
 import { makeRecorder } from './recorder.js';
 import { samples } from './samples.js';
 import { patchFromHash, patchToHash } from './share.js';
+import { getTheme, onThemeChange, setTheme } from './theme.js';
 import { download, guarded, showError, showInfo, stamp } from './toast.js';
 
 const $ = (id) => document.getElementById(id);
@@ -316,15 +317,48 @@ $('sampleFile').addEventListener('change', (e) => {
   e.target.value = '';
   if (file && sampleFor) loadSample(sampleFor, file);
 });
-// an audio file dropped on empty rack space becomes a sampler there
-$('content').addEventListener('dragover', (e) => e.preventDefault());
-$('content').addEventListener('drop', (e) => {
-  e.preventDefault();
-  const file = e.dataTransfer.files[0];
-  const cell = rack.cellAt(e.clientX, e.clientY);
-  if (e.target !== $('content') || !file || !cell) return;
-  loadSample(rack.insert('sampler', cell), file);
+// Dropped files: a patch file (.json) anywhere in the window loads it, an
+// audio file on empty rack space becomes a sampler there. Other drops are
+// ignored rather than opened by the browser, which would leave the page.
+const isPatchFile = (file) => /\.json$/i.test(file.name) || file.type === 'application/json';
+//
+// While files are dragged over the window, #dropzone says what a drop does.
+// The browser tells the file's type during the drag, not its name.
+const dropzone = $('dropzone');
+let dragDepth = 0; // dragenter and dragleave fire for every element crossed
+function dropHint(e) {
+  const type = e.dataTransfer.items[0]?.type ?? '';
+  if (type === 'application/json') return 'drop to load the patch';
+  if (type.startsWith('audio/')) return 'drop on empty rack space for a sampler';
+  return 'drop a patch file to load it, an audio file on empty rack space for a sampler';
+}
+const endDrag = () => {
+  dragDepth = 0;
+  dropzone.hidden = true;
+};
+window.addEventListener('dragenter', (e) => {
+  if (!e.dataTransfer.types.includes('Files')) return;
+  if (dragDepth++ === 0) {
+    dropzone.firstChild.textContent = dropHint(e);
+    dropzone.hidden = false;
+  }
 });
+window.addEventListener('dragleave', (e) => {
+  if (e.dataTransfer.types.includes('Files') && --dragDepth <= 0) endDrag();
+});
+window.addEventListener('dragend', endDrag);
+window.addEventListener('dragover', (e) => {
+  if (e.dataTransfer.types.includes('Files')) e.preventDefault();
+});
+window.addEventListener('drop', guarded(async (e) => {
+  endDrag();
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  e.preventDefault();
+  if (isPatchFile(file)) return importPatch(file);
+  const cell = rack.cellAt(e.clientX, e.clientY);
+  if (e.target === $('content') && cell) loadSample(rack.insert('sampler', cell), file);
+}));
 
 function usesInput() {
   return [...rack.modules.values()].some((m) => m.type === 'input');
@@ -410,17 +444,25 @@ function onMidiMessage(data) {
 async function startAudio() {
   recorder.stop();
   try {
-    await audio.start($('device').value);
+    await audio.start($('device').value, { sampleRate: Number($('rate').value), latency: $('latency').value });
   } catch (err) {
     await stopAudio();
     throw err;
   }
   rack.replay();
   buildClipLamps();
-  $('channels').textContent = `${audio.channels} ch · ${audio.ctx.sampleRate} hz`;
+  showAudioInfo();
+  // outputLatency is often only known once sound is flowing
+  setTimeout(showAudioInfo, 1000);
   $('start').textContent = 'stop';
   $('start').classList.add('on');
   if (usesInput()) await audio.openInput();
+}
+
+function showAudioInfo() {
+  if (!audio.running) return;
+  const ms = audio.latencyMs;
+  $('channels').textContent = `${audio.channels} ch · ${audio.ctx.sampleRate} hz${ms ? ` · ${ms} ms` : ''}`;
 }
 
 async function stopAudio() {
@@ -572,6 +614,24 @@ $('devices').addEventListener('click', guarded(showDevices));
 $('device').addEventListener('change', guarded(async () => {
   if (audio.running) await startAudio();
 }));
+// sample rate and latency are kept in this browser; a change restarts audio
+for (const [id, key] of [['rate', 'aparat.rate'], ['latency', 'aparat.latency']]) {
+  const select = $(id);
+  try {
+    const stored = localStorage.getItem(key);
+    if ([...select.options].some((o) => o.value === stored)) select.value = stored;
+  } catch {
+    // the default then
+  }
+  select.addEventListener('change', guarded(async () => {
+    try {
+      localStorage.setItem(key, select.value);
+    } catch {
+      // still used for now
+    }
+    if (audio.running) await startAudio();
+  }));
+}
 $('midi').addEventListener('click', guarded(async () => {
   await midi.enable();
   $('midi').hidden = true;
@@ -620,11 +680,26 @@ $('load').addEventListener('click', () => $('file').click());
 $('file').addEventListener('change', guarded(async (e) => {
   const file = e.target.files[0];
   e.target.value = '';
-  if (!file) return;
-  loadPatch(JSON.parse(await file.text()));
+  if (file) await importPatch(file);
+}));
+
+// a patch file from the menu or dropped on the window
+async function importPatch(file) {
+  let patch;
+  try {
+    patch = JSON.parse(await file.text());
+  } catch {
+    throw new Error(`${file.name} is not a patch file`);
+  }
+  if (!Array.isArray(patch?.modules) || !Array.isArray(patch?.cables)) throw new Error(`${file.name} is not a patch file`);
+  loadPatch(patch);
   showPatchInUrl(null);
   markSaved();
-}));
+}
+// settings: light or dark, or as the system says
+$('theme').value = getTheme();
+$('theme').addEventListener('change', (e) => setTheme(e.target.value));
+onThemeChange(() => rack.redrawDisplays());
 $('record').addEventListener('click', guarded(() => recorder.toggle()));
 
 // patches on the server, only shown when the service is there
