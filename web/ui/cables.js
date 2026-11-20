@@ -13,6 +13,29 @@ const WAVE_SPEED = 7;
 // cables on one jack each get their own, starting with the velak accent.
 const HOVER_COLOURS = ['#ed2c3e', '#f5a623', '#3ec7e0', '#7ed957', '#b48cff', '#ff7ab8'];
 
+// A cable between modules with colours of their own takes on those colours,
+// fading from the one at its start to the one at its end. The colour is
+// toned with the theme's cable greys, so it sits with the rest; an end
+// without a colour is the usual grey.
+const TONE_BASE = 0.7; // share of the module colour in the resting cable
+const TONE_SIGNAL = 0.55; // and in the signal running along it
+const COLOURED_ALPHA = 0.6;
+const rgbCache = new Map();
+function rgb(hex) {
+  if (!rgbCache.has(hex)) rgbCache.set(hex, [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16)));
+  return rgbCache.get(hex);
+}
+const parse = (s) => s.split(',').map(Number);
+const mix = (a, b, k) => a.map((v, i) => Math.round(v * k + b[i] * (1 - k)));
+// the resting and the signal colour of a cable end
+function tone(hex) {
+  const base = parse(colours['cable-base']);
+  const signal = parse(colours['cable-signal']);
+  if (!hex) return { base, signal };
+  const c = rgb(hex);
+  return { base: mix(c, base, TONE_BASE), signal: mix(c, signal, TONE_SIGNAL) };
+}
+
 function curve(x0, y0, x1, y1) {
   const pts = new Float32Array((SEGMENTS + 1) * 2);
   const dist = Math.hypot(x1 - x0, y1 - y0);
@@ -143,8 +166,13 @@ export class CableLayer {
     const buckets = Array.from({ length: BUCKETS }, () => new Path2D());
     const moving = !this.reduced.matches;
 
+    const coloured = [];
     for (const c of this.list) {
       const pts = c.pts;
+      if (c.from.m?.color || c.to.m?.color) {
+        coloured.push(c);
+        continue;
+      }
       base.moveTo(pts[0], pts[1]);
       for (let i = 1; i <= SEGMENTS; i++) base.lineTo(pts[i * 2], pts[i * 2 + 1]);
       for (let i = 0; i < SEGMENTS; i++) {
@@ -168,6 +196,8 @@ export class CableLayer {
       ctx.stroke(buckets[b]);
     }
 
+    for (const c of coloured) this.drawColoured(c, t, moving);
+
     // the selected cable stays lit in the accent colour, hovered ones on top
     const shown = [...this.highlight];
     if (this.selected && !this.highlight.has(this.selected)) shown.unshift(this.selected);
@@ -190,6 +220,49 @@ export class CableLayer {
       });
     }
 
+    this.drawGhost();
+  }
+
+  // a cable with a colour at one end or both, as a gradient along it
+  drawColoured(c, t, moving) {
+    const { ctx } = this;
+    const pts = c.pts;
+    const a = tone(c.from.m.color);
+    const b = tone(c.to.m.color);
+    const n = SEGMENTS * 2;
+    const gradient = (from, to, alpha) => {
+      const g = ctx.createLinearGradient(pts[0], pts[1], pts[n], pts[n + 1]);
+      g.addColorStop(0, `rgba(${from}, ${alpha})`);
+      g.addColorStop(1, `rgba(${to}, ${alpha})`);
+      return g;
+    };
+    const path = new Path2D();
+    path.moveTo(pts[0], pts[1]);
+    for (let i = 1; i <= SEGMENTS; i++) path.lineTo(pts[i * 2], pts[i * 2 + 1]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = gradient(a.base, b.base, COLOURED_ALPHA);
+    ctx.stroke(path);
+    // the signal, bucketed by level like the grey cables
+    const buckets = [];
+    for (let i = 0; i < SEGMENTS; i++) {
+      const level = c.hist[(c.head + i) % SEGMENTS];
+      if (level < 0.02) continue;
+      const wave = moving ? 0.6 + 0.4 * Math.sin(i * WAVE_K - t * WAVE_SPEED) : 1;
+      const k = Math.min(BUCKETS - 1, Math.floor(level * wave * BUCKETS));
+      buckets[k] ??= new Path2D();
+      buckets[k].moveTo(pts[i * 2], pts[i * 2 + 1]);
+      buckets[k].lineTo(pts[i * 2 + 2], pts[i * 2 + 3]);
+    }
+    ctx.lineWidth = 2.5;
+    buckets.forEach((p, k) => {
+      if (!p) return;
+      ctx.strokeStyle = gradient(a.signal, b.signal, (k + 1) / BUCKETS);
+      ctx.stroke(p);
+    });
+  }
+
+  drawGhost() {
+    const { ctx } = this;
     if (this.ghost) {
       const g = this.ghost;
       ctx.beginPath();

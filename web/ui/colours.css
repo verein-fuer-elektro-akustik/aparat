@@ -34,6 +34,14 @@
   --halo: 0, 0, 0;
   color-scheme: dark;
 }
+/* the theme's panel colours, for tinting a module with its own colour
+   (style.css, .module.coloured) */
+:root {
+  --panel-0: var(--panel);
+  --panel-out-0: var(--panel-out);
+  --edge-0: var(--edge);
+  --f-high-0: var(--f-high);
+}
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     --background: #f3f3f3;

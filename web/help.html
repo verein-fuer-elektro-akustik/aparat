@@ -23,6 +23,7 @@
     <li><a href="#start">getting started</a></li>
     <li><a href="#concepts">signals and voltages</a></li>
     <li><a href="#rack">modules and cables</a></li>
+    <li><a href="#composites">composites</a></li>
     <li><a href="#patches">patches</a></li>
     <li><a href="#keys">keyboard and mouse</a></li>
     <li><a href="#audio">audio and recording</a></li>
@@ -67,6 +68,7 @@
   <h3>modules</h3>
   <ul>
     <li>Move a module by dragging its title. Neighbours make room; <kbd>esc</kbd> during the drag puts everything back.</li>
+    <li>Right-click a module for a colour: one of the swatches, any colour with <b>+</b>, or none. It colours all the selected modules and is kept in the patch.</li>
     <li>Click a module to select it, <kbd>shift</kbd>-click to select several, or <kbd>shift</kbd>-drag on empty space to draw a box around them. Several selected modules move together.</li>
     <li>Right-click a module for <b>random</b> (random knob values), <b>reset</b>, <b>duplicate</b>, <b>copy</b>, <b>remove</b> and <b>help</b>, which opens its entry on this page.</li>
     <li>Some modules have a <b>bypass</b> button: the signal then goes straight through, as if the module were not there.</li>
@@ -74,7 +76,7 @@
   </ul>
   <h3>knobs and buttons</h3>
   <ul>
-    <li>Drag a knob up or down; hold <kbd>shift</kbd> for fine steps. The value shows while the pointer is over it.</li>
+    <li>Drag a knob up or down, or turn the mouse wheel over it; hold <kbd>shift</kbd> for fine steps. The value shows while the pointer is over it.</li>
     <li>Double-click a knob to reset it. When a knob has focus, the arrow keys move it.</li>
     <li>Square buttons switch on and off with a click. The button module's button is on only while it is held.</li>
     <li>Right-click a knob to link it to a midi controller, see <a href="#midi">midi</a>.</li>
@@ -91,6 +93,22 @@
   <ul>
     <li>Drag empty space, or middle-drag anywhere, to move the view.</li>
     <li><kbd>ctrl</kbd>+wheel, a pinch, or <kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd> zoom the rack (also in the view menu).</li>
+  </ul>
+</section>
+
+<section id="composites">
+  <h2>composites</h2>
+  <p>A composite is a module made of modules: a voice of vco, filter, envelope and vca, an effect chain, a sequencer setup. It sits in the rack as one panel and is used like any other module, as often as you like.</p>
+  <ul>
+    <li>Select the modules (<kbd>shift</kbd>-click or <kbd>shift</kbd>-drag), right-click one of them and choose <b>make composite</b>.</li>
+    <li>Give it a name and tick the knobs it should show on its panel. Cables between the chosen modules stay inside; cables to other modules become the composite's jacks, named after the jacks they lead to.</li>
+    <li>The composite then appears at the top of the add-module menu, to add it again. Each one has its own knob settings and its own sound.</li>
+    <li>A composite is marked by two stacked squares after its name. To change the inside, click them, double-click the composite's title, or right-click it and choose <b>edit composite</b>. Its inside opens in a view of its own, with the path at the top (<code>patch › voice</code>); click <b>done</b>, a name in the path, or press <kbd>esc</kbd> to go back. The patch keeps playing while you edit, and every composite of that name follows the changes as you make them.</li>
+    <li>Inside, the panels <b>in</b> and <b>out</b> are the composite's jacks. Patch from the <b>+</b> jack of <b>in</b> (or to the <b>+</b> of <b>out</b>) for a new jack; a jack without cables inside goes away.</li>
+    <li><b>panel</b>, at the top of the edit view, names the jacks, chooses the knobs on the composite's panel and their names, and gives it a description for the add-module menu. Cables and midi links follow a rename.</li>
+    <li>A knob turned inside changes every composite of that name, unless the knob is on the composite's panel: then each one keeps its own setting.</li>
+    <li><b>ungroup composite</b> turns one composite back into its modules, in the patch.</li>
+    <li>Composites are kept in the patch, so they travel with it: stored patches, files, links and copied modules all carry them along. A composite can contain composites.</li>
   </ul>
 </section>
 

@@ -11,6 +11,7 @@ import { makeRecorder } from './recorder.js';
 import { samples } from './samples.js';
 import { patchFromHash, patchToHash } from './share.js';
 import { getTheme, onThemeChange, setTheme } from './theme.js';
+import { boundaryDefs, dependents, insidePatch, instancePrefixes, makeComposite, renamePanel, sameBuild, specFromInside, ungroup } from './composite.js';
 import { download, guarded, showError, showInfo, stamp } from './toast.js';
 
 const $ = (id) => document.getElementById(id);
@@ -24,7 +25,26 @@ const midi = new Midi({
   onMessage: onMidiMessage,
 });
 
-const rack = new Rack({
+// The right-click menu of a module, in the patch or in a composite's edit
+// view. It works on the selection, which the right-clicked module is part of.
+function moduleMenu(e, m) {
+  if (m.def.boundary) return;
+  openContext(e.clientX, e.clientY, rack.selection.size > 1 ? `${rack.selection.size} modules` : m.type, [
+    ['random', () => selected().forEach((o) => rack.randomize(o))],
+    ['reset', () => selected().forEach((o) => rack.resetParams(o))],
+    ['duplicate', duplicateSelection],
+    ['copy', copySelection],
+    ['remove', removeSelection],
+    ['make composite', () => openCompose(selected())],
+    ...(m.def.composite && rack.selection.size <= 1 ? [['edit composite', () => openComposite(m)], ['ungroup composite', () => ungroupModule(m)]] : []),
+    ['help', () => openHelp(m.def.composite ? 'composites' : `m-${m.type.replace(/\s+/g, '-')}`)],
+    swatches(selected()),
+  ]);
+}
+
+// The patch's rack. `rack` is the one in view: this one, or the edit view's
+// while a composite is open (see "editing composites" below).
+const top = new Rack({
   scroller: $('rack'),
   sizer: $('sizer'),
   content: $('content'),
@@ -33,15 +53,23 @@ const rack = new Rack({
   onChange: () => undo.changed(),
   files: samples,
   onFile: (m, file) => (file ? loadSample(m, file) : chooseSample(m)),
-  // the menu works on the selection, which the right-clicked module is part of
-  onContextMenu: (e, m) => openContext(e.clientX, e.clientY, rack.selection.size > 1 ? `${rack.selection.size} modules` : m.type, [
-    ['random', () => selected().forEach((o) => rack.randomize(o))],
-    ['reset', () => selected().forEach((o) => rack.resetParams(o))],
-    ['duplicate', duplicateSelection],
-    ['copy', copySelection],
-    ['remove', removeSelection],
-    ['help', () => openHelp(`m-${m.type.replace(/\s+/g, '-')}`)],
-  ]),
+  onContextMenu: moduleMenu,
+  onOpen: (m) => openComposite(m),
+});
+let rack = top;
+const innerCables = new CableLayer($('innerCables'), $('innerRack'));
+innerCables.setPeaks(new Float32Array(0));
+const inner = new Rack({
+  scroller: $('innerRack'),
+  sizer: $('innerSizer'),
+  content: $('innerContent'),
+  cables: innerCables,
+  send: (m) => forwardInner(m),
+  onChange: () => scheduleSync(),
+  files: samples,
+  onFile: (m, file) => (file ? loadSample(m, file) : chooseSample(m)),
+  onContextMenu: moduleMenu,
+  onOpen: (m) => openComposite(m),
 });
 const recorder = makeRecorder({ audio, button: $('record') });
 
@@ -56,7 +84,7 @@ const undo = {
   at: -1,
   timer: 0,
   quiet: false,
-  snapshot: () => JSON.stringify(rack.toJSON()),
+  snapshot: () => JSON.stringify(top.toJSON()),
   reset() {
     clearTimeout(this.timer);
     this.stack = [this.snapshot()];
@@ -90,13 +118,14 @@ const undo = {
     this.at = to;
     this.quiet = true;
     try {
-      rack.apply(JSON.parse(this.stack[to]));
+      top.apply(JSON.parse(this.stack[to]));
     } finally {
       this.quiet = false;
     }
     // module and cable order can differ after apply; keep what the rack now says
     this.stack[to] = this.snapshot();
-    rack.pruneSelection();
+    top.pruneSelection();
+    if (editing) reloadInside();
     this.buttons();
     patchChanged();
     restoreSamples();
@@ -141,7 +170,7 @@ function selected() {
 
 function removeSelection() {
   if (rack.selectedCable) rack.disconnect(rack.selectedCable);
-  else selected().forEach((m) => rack.remove(m));
+  else selected().filter((m) => !m.def.boundary).forEach((m) => rack.remove(m));
 }
 
 function added(mods) {
@@ -179,6 +208,375 @@ function pasteClipboard() {
   if (data) added(rack.paste(data));
 }
 
+// composites: modules made of modules (see composite.js). The rack is
+// brought to the changed patch with apply(), so the other modules keep
+// playing undisturbed.
+
+function applyPatch(patch, select) {
+  rack.apply(patch);
+  rack.unoverlap();
+  rack.select(null);
+  for (const id of select) {
+    const m = rack.modules.get(id);
+    if (m) rack.select(m, true);
+  }
+}
+
+function openCompose(mods) {
+  mods = mods.filter((m) => !m.def.boundary);
+  if (!mods.length) return;
+  closeContext();
+  const box = $('compose');
+  box.mods = mods;
+  $('composeName').value = '';
+  $('composeKnobs').replaceChildren(...mods.flatMap((m) => {
+    const keys = m.keys.filter((k) => k !== 'bypass');
+    if (!keys.length) return [];
+    const group = document.createElement('fieldset');
+    const legend = document.createElement('legend');
+    legend.textContent = m.type;
+    group.append(legend, ...keys.map((k) => {
+      const label = document.createElement('label');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.dataset.id = m.id;
+      box.dataset.param = k;
+      label.append(box, ` ${k}`);
+      return label;
+    }));
+    return [group];
+  }));
+  composeCheck();
+  box.hidden = false;
+  $('composeName').focus();
+}
+
+// The name decides what "make" does: a new composite, or replacing the
+// inside of an existing one everywhere it is used.
+function composeCheck() {
+  const name = $('composeName').value.trim();
+  let note = '';
+  if (!name) note = 'give it a name';
+  else if (defs.some((d) => d.name === name)) note = 'that is the name of a built-in module';
+  else if (openNow().has(name)) note = 'that composite is open, or contains the one that is';
+  else if (rack.composites[name]) note = `replaces the composite "${name}" everywhere in this patch`;
+  $('composeNote').textContent = note;
+  $('composeOk').disabled = !name || defs.some((d) => d.name === name) || openNow().has(name);
+  $('composeOk').textContent = rack.composites[name] ? 'replace' : 'make';
+}
+
+function closeCompose() {
+  $('compose').hidden = true;
+}
+
+$('composeName').addEventListener('input', composeCheck);
+$('composeCancel').addEventListener('click', closeCompose);
+$('compose').addEventListener('keydown', (e) => {
+  e.stopPropagation();
+  if (e.key === 'Escape') closeCompose();
+  if (e.key === 'Enter' && !$('composeOk').disabled) $('composeOk').click();
+});
+$('composeOk').addEventListener('click', guarded(() => {
+  const mods = $('compose').mods.filter((m) => rack.live(m));
+  const name = $('composeName').value.trim();
+  const exposed = [...$('composeKnobs').querySelectorAll('input:checked')].map((b) => ({ id: Number(b.dataset.id), param: b.dataset.param }));
+  closeCompose();
+  if (!mods.length) return;
+  const next = makeComposite(rack.toJSON(), mods.map((m) => m.id), name, exposed, rack.defOf);
+  const made = next.modules[next.modules.length - 1];
+  applyPatch(next, [made.id]);
+}));
+
+function ungroupModule(m) {
+  if (!rack.live(m)) return;
+  const { newIds, ...next } = ungroup(rack.toJSON(), m.id, rack.defOf);
+  applyPatch(next, newIds ?? []);
+  restoreSamples();
+}
+
+// editing composites: the inside of a composite in a view of its own, over
+// the patch. The patch keeps playing; what changes inside is brought to the
+// patch as it happens (syncInside), so every instance of the composite plays
+// the new inside. The view is a second rack (inner) that never talks to the
+// audio engine itself: knob turns are passed on to the instances
+// (forwardInner), anything else rebuilds them.
+
+let editing = null; // the names of the open composites, outermost first
+let shownPrefix = ''; // engine id prefix of the instance whose displays show
+let loadingInner = false;
+let syncTimer = 0;
+
+// composites that can't be added or made now: the open ones and all that
+// contain them, which would contain themselves
+function openNow() {
+  const out = new Set();
+  for (const name of editing ?? []) for (const n of dependents(name, top.composites)) out.add(n);
+  return out;
+}
+
+function openComposite(m) {
+  if (!m.def.composite) return;
+  closeContext();
+  closeMenu();
+  syncInside();
+  editing = [...(editing ?? []), m.type];
+  reloadInside(true);
+}
+
+// Back to a level: 0 is the patch.
+function leaveTo(depth) {
+  if (!editing) return;
+  syncInside();
+  closeContext();
+  closeMenu();
+  closePanelEdit();
+  editing.length = Math.max(0, depth);
+  if (editing.length) {
+    reloadInside(true);
+    return;
+  }
+  editing = null;
+  loadingInner = true;
+  try {
+    inner.clear();
+  } finally {
+    loadingInner = false;
+  }
+  $('inner').hidden = true;
+  rack = top;
+  zoomShown();
+}
+
+// Show the open composite as it is in the patch now.
+function reloadInside(fresh = false) {
+  const name = editing?.at(-1);
+  const spec = name && top.composites[name];
+  if (!spec) {
+    leaveTo(0);
+    return;
+  }
+  const view = $('innerRack');
+  const keep = fresh ? null : [view.scrollLeft, view.scrollTop];
+  const selectedIds = fresh ? [] : [...inner.selection].map((m) => m.id);
+  // shown first: the rack measures its jacks to draw the cables
+  $('inner').hidden = false;
+  loadingInner = true;
+  try {
+    inner.extraDefs = boundaryDefs(spec);
+    inner.load(insidePatch(spec, top.composites, top.defOf));
+    for (const id of selectedIds) {
+      const m = inner.modules.get(id);
+      if (m) inner.select(m, true);
+    }
+  } finally {
+    loadingInner = false;
+  }
+  shownPrefix = instancePrefixes(name, [...top.modules.values()], top.composites)[0] ?? '';
+  rack = inner;
+  // the edit view opens at the patch's zoom
+  if (fresh) inner.setZoom(top.zoom);
+  if (keep) [view.scrollLeft, view.scrollTop] = keep;
+  else view.scrollTo(0, 0);
+  crumbs();
+  zoomShown();
+}
+
+function crumbs() {
+  const nav = $('crumbs');
+  nav.replaceChildren();
+  const level = (label, depth) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.addEventListener('click', () => leaveTo(depth));
+    return b;
+  };
+  nav.append(level($('patchCurrent').textContent.replace(/ \*$/, '') || 'patch', 0));
+  editing.forEach((name, i) => {
+    nav.append('›');
+    if (i === editing.length - 1) {
+      const b = document.createElement('b');
+      b.textContent = name;
+      nav.append(b);
+    } else {
+      nav.append(level(name, i + 1));
+    }
+  });
+}
+
+// the zoom buttons show the zoom of the rack in view
+function zoomShown() {
+  $('zoomLevel').textContent = `${Math.round(rack.zoom * 100)}%`;
+  $('zoomOut').disabled = rack.zoom <= ZOOM_MIN;
+  $('zoomIn').disabled = rack.zoom >= ZOOM_MAX;
+}
+
+function scheduleSync() {
+  if (loadingInner || !editing) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncInside, 0);
+}
+
+// Bring the patch to what the edit view shows.
+function syncInside() {
+  clearTimeout(syncTimer);
+  if (!editing || loadingInner) return;
+  if (inner.dragging) {
+    // a cable picked up is not gone yet
+    syncTimer = setTimeout(syncInside, 50);
+    return;
+  }
+  const name = editing.at(-1);
+  const old = top.composites[name];
+  if (!old) return;
+  const spec = specFromInside(inner.toJSON(), old);
+  // composites made inside (make composite, paste) come along
+  const composites = { ...top.composites, ...inner.composites, [name]: spec };
+  if (JSON.stringify(composites) === JSON.stringify(top.composites)) return;
+  const others = Object.keys(composites).some((n) => n !== name && JSON.stringify(composites[n]) !== JSON.stringify(top.composites[n]));
+  const jacks = (s) => JSON.stringify([s.inputs.map((j) => j.name), s.outputs.map((j) => j.name)]);
+  if (sameBuild(old, spec) && !others) {
+    // only knob settings or places changed: the instances keep playing,
+    // the knobs were already passed on to them
+    top.setComposites(composites);
+    for (const m of top.modules.values()) if (m.def.composite) m.def = top.defOf(m.type);
+    top.onChange();
+  } else {
+    top.apply({ ...top.toJSON(), composites });
+    shownPrefix = instancePrefixes(name, [...top.modules.values()], top.composites)[0] ?? '';
+  }
+  inner.setComposites(top.composites);
+  // the jack panels change: show them anew
+  if (jacks(old) !== jacks(spec)) reloadInside();
+}
+
+// What the edit view would send to the engine: knob turns go to the same
+// module in every instance, unless the knob is on the composite's panel
+// (then each instance has its own setting). The rest is done by syncInside.
+function forwardInner(msg) {
+  if (msg.op !== 'param' || !editing || loadingInner) return;
+  const name = editing.at(-1);
+  const spec = top.composites[name];
+  if (!spec) return;
+  if (typeof msg.id === 'number') {
+    const m = inner.modules.get(msg.id);
+    if (!m || m.def.boundary) return;
+    if (spec.params?.some((p) => p.module === msg.id && p.param === m.keys[msg.i])) return;
+  }
+  for (const prefix of instancePrefixes(name, [...top.modules.values()], top.composites)) {
+    audio.send({ op: 'param', id: `${prefix}/${msg.id}`, i: msg.i, v: msg.v });
+  }
+}
+
+$('innerDone').addEventListener('click', () => leaveTo(editing ? editing.length - 1 : 0));
+
+// The panel of the open composite: names of its jacks, which knobs it shows
+// and their names, its description.
+function openPanelEdit() {
+  if (!editing) return;
+  syncInside();
+  const name = editing.at(-1);
+  const spec = top.composites[name];
+  $('panelTitle').textContent = `${name}: panel`;
+  $('panelDoc').value = spec.doc ?? '';
+  const field = (value, data, enabled = true) => {
+    const input = document.createElement('input');
+    input.value = value;
+    input.maxLength = 24;
+    input.spellcheck = false;
+    input.disabled = !enabled;
+    Object.assign(input.dataset, data);
+    return input;
+  };
+  const group = (title, rows) => {
+    const set = document.createElement('fieldset');
+    const legend = document.createElement('legend');
+    legend.textContent = title;
+    set.append(legend, ...rows.flat());
+    return set;
+  };
+  const jackRows = (list, kind) => list.map((j) => {
+    const label = document.createElement('label');
+    label.textContent = j.name;
+    return [label, field(j.name, { kind, old: j.name })];
+  });
+  const sets = [];
+  if (spec.inputs.length) sets.push(group('inputs', jackRows(spec.inputs, 'inputs')));
+  if (spec.outputs.length) sets.push(group('outputs', jackRows(spec.outputs, 'outputs')));
+  for (const m of inner.modules.values()) {
+    if (m.def.boundary) continue;
+    const keys = m.keys.filter((k) => k !== 'bypass');
+    if (!keys.length) continue;
+    sets.push(group(`${m.type} knobs`, keys.map((k) => {
+      const p = spec.params.find((q) => q.module === m.id && q.param === k);
+      const label = document.createElement('label');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = !!p;
+      const name = field(p?.name ?? k, { kind: 'params', module: m.id, param: k, old: p?.name ?? '' }, !!p);
+      box.addEventListener('change', () => {
+        name.disabled = !box.checked;
+        if (box.checked) name.focus();
+      });
+      label.append(box, k);
+      return [label, name];
+    })));
+  }
+  if (!sets.length) {
+    const p = document.createElement('p');
+    p.textContent = 'nothing inside yet';
+    sets.push(p);
+  }
+  $('panelFields').replaceChildren(...sets);
+  $('panelNote').textContent = '';
+  $('panelEdit').hidden = false;
+  $('panelDoc').focus();
+}
+
+function closePanelEdit() {
+  $('panelEdit').hidden = true;
+}
+
+function applyPanelEdit() {
+  const name = editing?.at(-1);
+  const spec = name && top.composites[name];
+  if (!spec) return closePanelEdit();
+  const fields = [...$('panelFields').querySelectorAll('input:not([type])')];
+  const renames = { inputs: {}, outputs: {}, params: {} };
+  const names = { inputs: [], outputs: [], params: [] };
+  const params = [];
+  for (const f of fields) {
+    if (f.disabled) continue;
+    const kind = f.dataset.kind;
+    const value = f.value.trim();
+    names[kind].push(value);
+    if (kind === 'params') {
+      if (f.dataset.old && f.dataset.old !== value) renames.params[f.dataset.old] = value;
+      params.push({ name: value, module: Number(f.dataset.module), param: f.dataset.param });
+    } else if (f.dataset.old !== value) {
+      renames[kind][f.dataset.old] = value;
+    }
+  }
+  for (const [kind, list] of Object.entries(names)) {
+    const label = kind === 'params' ? 'knobs' : kind;
+    if (list.some((n) => !n || n === '+')) return void ($('panelNote').textContent = `${label} need a name`);
+    if (new Set(list).size !== list.length) return void ($('panelNote').textContent = `two ${label} have the same name`);
+  }
+  closePanelEdit();
+  const next = renamePanel({ ...top.toJSON(), composites: top.composites }, name, renames);
+  next.composites[name] = { ...next.composites[name], params, doc: $('panelDoc').value.trim() };
+  top.apply(next);
+  reloadInside();
+}
+
+$('innerPanel').addEventListener('click', openPanelEdit);
+$('panelCancel').addEventListener('click', closePanelEdit);
+$('panelOk').addEventListener('click', guarded(applyPanelEdit));
+$('panelEdit').addEventListener('keydown', (e) => {
+  e.stopPropagation();
+  if (e.key === 'Escape') closePanelEdit();
+  if (e.key === 'Enter') applyPanelEdit();
+});
+
 // right-click menu
 
 const ctx = $('ctx');
@@ -186,7 +584,9 @@ const ctx = $('ctx');
 function openContext(x, y, title, items) {
   closeMenu();
   $('ctxTitle').textContent = title;
-  $('ctxItems').replaceChildren(...items.map(([label, run]) => {
+  $('ctxItems').replaceChildren(...items.map((item) => {
+    if (item instanceof Node) return item;
+    const [label, run] = item;
     const b = document.createElement('button');
     b.textContent = label;
     b.addEventListener('click', guarded(async () => {
@@ -201,12 +601,61 @@ function openContext(x, y, title, items) {
   $('ctxItems').firstElementChild?.focus({ focusVisible: false });
 }
 
+// Colours to give modules: muted enough that a tinted panel stays calm in
+// both themes. The last swatch picks any colour.
+const SWATCHES = ['#d0453a', '#d98b2b', '#c9b13c', '#5d9e4a', '#3a9e94', '#3f78c4', '#7e5cc4', '#c25a9a'];
+
+function swatches(mods) {
+  const row = document.createElement('div');
+  row.className = 'swatches';
+  row.setAttribute('aria-label', 'colour');
+  const current = mods.every((m) => m.color === mods[0].color) ? mods[0].color : undefined;
+  const colour = (c) => {
+    for (const m of mods) rack.setColour(m, c);
+  };
+  const swatch = (c, title) => {
+    const b = document.createElement('button');
+    b.title = title;
+    b.setAttribute('aria-label', title);
+    if (c) b.style.setProperty('--swatch', c);
+    else b.classList.add('none');
+    if (current === (c ?? null)) b.classList.add('on');
+    b.addEventListener('click', () => {
+      closeContext();
+      colour(c);
+    });
+    return b;
+  };
+  row.append(swatch(null, 'no colour'), ...SWATCHES.map((c) => swatch(c, c)));
+  // any colour; changes show while choosing
+  const label = document.createElement('label');
+  label.className = 'custom';
+  label.title = 'any colour';
+  const input = document.createElement('input');
+  input.type = 'color';
+  input.setAttribute('aria-label', 'any colour');
+  const own = current && !SWATCHES.includes(current) ? current : null;
+  input.value = own ?? current ?? '#808080';
+  if (own) {
+    label.classList.add('coloured', 'on');
+    label.style.setProperty('--swatch', own);
+  }
+  input.addEventListener('input', () => colour(input.value));
+  input.addEventListener('change', () => {
+    colour(input.value);
+    closeContext();
+  });
+  label.append(input);
+  row.append(label);
+  return row;
+}
+
 function closeContext() {
   ctx.hidden = true;
 }
 
 ctx.addEventListener('keydown', (e) => {
-  const list = [...$('ctxItems').children];
+  const list = [...$('ctxItems').querySelectorAll('button, input')];
   const i = list.indexOf(document.activeElement);
   if (e.key === 'ArrowDown') list[(i + 1) % list.length].focus();
   else if (e.key === 'ArrowUp') list[(i - 1 + list.length) % list.length].focus();
@@ -224,15 +673,16 @@ ctx.addEventListener('contextmenu', (e) => e.preventDefault());
 const appRoot = new URL('.', document.baseURI);
 
 function currentPatch() {
-  return { ...rack.toJSON(), midi: { in: midi.inName, out: midi.outName } };
+  return { ...top.toJSON(), midi: { in: midi.inName, out: midi.outName } };
 }
 
 // Loading is one undoable step, so an accidental "new" can be taken back.
 function loadPatch(patch) {
+  leaveTo(0);
   undo.commit();
   undo.quiet = true;
   try {
-    rack.load(patch);
+    top.load(patch);
   } finally {
     undo.quiet = false;
   }
@@ -253,6 +703,7 @@ const canon = (patch) => JSON.stringify({
   modules: [...patch.modules].sort((a, b) => a.id - b.id),
   cables: patch.cables.map((c) => JSON.stringify(c)).sort(),
   midiMap: patch.midiMap,
+  composites: patch.composites ?? {},
 });
 let saved = null;
 // the name of the patch whose changes are in the autosave, undefined for none
@@ -260,11 +711,11 @@ let autosaved;
 try {
   autosaved = JSON.parse(localStorage.getItem('aparat.autosave'))?.name;
 } catch {}
-const dirty = () => saved !== null && canon(rack.toJSON()) !== saved;
+const dirty = () => saved !== null && canon(top.toJSON()) !== saved;
 
 function markSaved() {
   undo.commit();
-  saved = canon(rack.toJSON());
+  saved = canon(top.toJSON());
   patchChanged();
 }
 
@@ -275,6 +726,7 @@ function patchChanged() {
   // the header shows the patch's name, also in the browser tab
   $('patchCurrent').textContent = `${name ?? 'untitled'}${changed ? ' *' : ''}`;
   $('patchCurrent').title = changed ? 'changed since it was loaded or stored' : 'loaded patch';
+  if (editing) crumbs();
   document.title = `${name ?? 'untitled'}${changed ? ' *' : ''} · aparat`;
   try {
     if (changed) {
@@ -299,14 +751,14 @@ window.addEventListener('beforeunload', (e) => {
 // if they were loaded here before.
 
 async function restoreSamples() {
-  for (const name of rack.fileNames()) {
-    if (!samples.get(name) && (await samples.restore(name))) rack.fileLoaded(name);
+  for (const name of top.fileNames()) {
+    if (!samples.get(name) && (await samples.restore(name))) top.fileLoaded(name);
   }
 }
 
 const loadSample = guarded(async (m, file) => {
   const name = await samples.add(file);
-  rack.fileLoaded(name); // other samplers playing a file of this name
+  top.fileLoaded(name); // other samplers playing a file of this name
   rack.setFile(m, name);
 });
 
@@ -364,7 +816,7 @@ window.addEventListener('drop', guarded(async (e) => {
 }));
 
 function usesInput() {
-  return [...rack.modules.values()].some((m) => m.type === 'input');
+  return [...top.modules.values()].some((m) => m.type === 'input');
 }
 
 function patchFromPath() {
@@ -414,7 +866,14 @@ function onEngineMessage(m) {
 
 function onFrame(m) {
   cables.setPeaks(m.peaks);
-  for (const d of m.displays) rack.drawDisplay(d.id, d.data);
+  for (const d of m.displays) {
+    top.drawDisplay(d.id, d.data);
+    // the edit view shows the displays of the composite's first instance
+    if (editing && typeof d.id === 'string' && d.id.startsWith(`${shownPrefix}/`)) {
+      const rest = d.id.slice(shownPrefix.length + 1);
+      if (/^\d+$/.test(rest)) inner.drawDisplay(Number(rest), d.data);
+    }
+  }
   cpu += (m.busy / m.span - cpu) * 0.05;
   $('cpu').textContent = `${Math.round(cpu * 100)}%`;
   const now = performance.now();
@@ -439,7 +898,7 @@ function buildClipLamps() {
 
 function onMidiMessage(data) {
   audio.send({ op: 'midi', bytes: data });
-  if ((data[0] & 0xf0) === 0xb0 && data[0] < 0xf0) rack.handleCc((data[0] & 15) + 1, data[1], data[2]);
+  if ((data[0] & 0xf0) === 0xb0 && data[0] < 0xf0) top.handleCc((data[0] & 15) + 1, data[1], data[2]);
 }
 
 // toolbar
@@ -452,7 +911,7 @@ async function startAudio() {
     await stopAudio();
     throw err;
   }
-  rack.replay();
+  top.replay();
   buildClipLamps();
   showAudioInfo();
   // outputLatency is often only known once sound is flowing
@@ -472,7 +931,8 @@ async function stopAudio() {
   recorder.stop();
   await audio.stop();
   cables.clearLevels();
-  rack.clearLive();
+  top.clearLive();
+  inner.clearLive();
   $('start').textContent = 'start';
   $('start').classList.remove('on');
   $('channels').textContent = 'off';
@@ -518,7 +978,7 @@ function showDoc(def) {
   hints.hidden = !!def;
 }
 
-for (const def of [...defs].sort((a, b) => a.name.localeCompare(b.name))) {
+function libraryButton(def) {
   const button = document.createElement('button');
   button.textContent = def.name;
   button.addEventListener('click', guarded(() => addModule(def.name)));
@@ -526,7 +986,20 @@ for (const def of [...defs].sort((a, b) => a.name.localeCompare(b.name))) {
   button.addEventListener('pointerenter', () => showDoc(def));
   button.addEventListener('pointerleave', () => showDoc(focusedDef()));
   button.def = def;
-  $('library').append(button);
+  return button;
+}
+for (const def of [...defs].sort((a, b) => a.name.localeCompare(b.name))) $('library').append(libraryButton(def));
+
+// the patch's composites come first, marked, and change with the patch
+function listComposites() {
+  for (const b of $('library').querySelectorAll('.composite')) b.remove();
+  const banned = openNow();
+  const names = Object.keys(rack.composites).filter((n) => !banned.has(n)).sort((a, b) => a.localeCompare(b));
+  $('library').prepend(...names.map((name) => {
+    const b = libraryButton(rack.defOf(name));
+    b.classList.add('composite');
+    return b;
+  }));
 }
 
 // the def of the focused or highlighted button, if any
@@ -551,6 +1024,7 @@ function filterMenu() {
 
 function openMenu(x, y, cell) {
   menuCell = cell;
+  listComposites();
   search.value = '';
   filterMenu();
   menu.hidden = false;
@@ -597,21 +1071,23 @@ window.addEventListener('pointerdown', (e) => {
 }, true);
 // right-click on empty rack space: the add-module menu at the pointer
 // right-click on a cable, also where it crosses a module: the cable's menu
-$('rack').addEventListener('contextmenu', (e) => {
-  const cable = rack.cableAt(e);
-  if (!cable) return;
-  e.preventDefault();
-  e.stopPropagation();
-  closeMenu();
-  rack.selectCable(cable);
-  openContext(e.clientX, e.clientY, rack.cableName(cable), [['remove', () => rack.disconnect(cable)]]);
-}, true);
-$('content').addEventListener('contextmenu', (e) => {
-  if (e.target !== $('content')) return;
-  e.preventDefault();
-  closeContext();
-  openMenu(e.clientX, e.clientY, rack.cellAt(e.clientX, e.clientY));
-});
+for (const [scroller, content] of [[$('rack'), $('content')], [$('innerRack'), $('innerContent')]]) {
+  scroller.addEventListener('contextmenu', (e) => {
+    const cable = rack.cableAt(e);
+    if (!cable) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeMenu();
+    rack.selectCable(cable);
+    openContext(e.clientX, e.clientY, rack.cableName(cable), [['remove', () => rack.disconnect(cable)]]);
+  }, true);
+  content.addEventListener('contextmenu', (e) => {
+    if (e.target !== content) return;
+    e.preventDefault();
+    closeContext();
+    openMenu(e.clientX, e.clientY, rack.cellAt(e.clientX, e.clientY));
+  });
+}
 
 $('start').addEventListener('click', guarded(() => (audio.running ? stopAudio() : startAudio())));
 $('devices').addEventListener('click', guarded(showDevices));
@@ -667,7 +1143,7 @@ $('new').addEventListener('click', () => {
 });
 $('share').addEventListener('click', guarded(async () => {
   const url = appRoot.href + (await patchToHash(currentPatch()));
-  const files = rack.fileNames().length ? ' (audio files are not part of it)' : '';
+  const files = top.fileNames().length ? ' (audio files are not part of it)' : '';
   try {
     await navigator.clipboard.writeText(url);
     showInfo(`link to this patch copied${files}`);
@@ -710,7 +1186,10 @@ for (const b of document.querySelectorAll('[data-help]')) b.addEventListener('cl
 // settings: light or dark, or as the system says
 $('theme').value = getTheme();
 $('theme').addEventListener('change', (e) => setTheme(e.target.value));
-onThemeChange(() => rack.redrawDisplays());
+onThemeChange(() => {
+  top.redrawDisplays();
+  inner.redrawDisplays();
+});
 $('record').addEventListener('click', guarded(() => recorder.toggle()));
 
 // patches on the server, only shown when the service is there
@@ -856,7 +1335,7 @@ $('zoomIn').addEventListener('click', () => zoomTo(zoomStep(1)));
 $('zoomOut').addEventListener('click', () => zoomTo(zoomStep(-1)));
 $('zoomReset').addEventListener('click', () => zoomTo(1));
 // ctrl+wheel, which is also what a trackpad pinch sends
-$('rack').addEventListener('wheel', (e) => {
+$('stage').addEventListener('wheel', (e) => {
   if (!e.ctrlKey) return;
   e.preventDefault();
   const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
@@ -879,8 +1358,15 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (typing(e.target)) return;
+  // space scrolls a page down; the rack should stay put. Buttons and the
+  // push buttons on panels still take it.
+  if (e.key === ' ' && !e.target.closest('button, [role="switch"]')) e.preventDefault();
   // edits during a drag would fight with the layout the drag works on
   if (rack.dragging && e.key !== 'Escape') return;
+  if (e.key === 'Escape' && editing && !rack.selection.size && !rack.selectedCable) {
+    leaveTo(editing.length - 1);
+    return;
+  }
   if (e.key === 'Escape') {
     rack.select(null);
     rack.cables.selected = null;
@@ -947,7 +1433,7 @@ window.addEventListener('keydown', (e) => {
   let timer = 0;
   let fired = 0;
   const cancel = () => clearTimeout(timer);
-  $('rack').addEventListener('pointerdown', (e) => {
+  $('stage').addEventListener('pointerdown', (e) => {
     cancel();
     if (e.pointerType !== 'touch') return;
     const { target, clientX, clientY } = e;
@@ -1028,4 +1514,4 @@ try {
 zoomTo(savedZoom);
 if (!dirty()) undo.reset();
 else patchChanged();
-window.aparat = { rack, audio, midi, undo };
+window.aparat = { get rack() { return rack; }, top, inner, audio, midi, undo };

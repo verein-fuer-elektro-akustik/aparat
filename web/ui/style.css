@@ -43,6 +43,40 @@ button.on { background: var(--f-high); color: var(--background); }
 #record.on { background: var(--accent); color: var(--background); }
 :focus-visible { outline: 1px solid var(--f-high); outline-offset: 1px; }
 
+/* Form controls in the theme's greys, not the browser's blue. */
+:root { accent-color: var(--f-high); }
+input[type="checkbox"] {
+  appearance: none;
+  flex: none;
+  width: .8rem;
+  height: .8rem;
+  margin: 0;
+  background: var(--panel-out);
+  border: 1px solid var(--f-low);
+  cursor: pointer;
+}
+input[type="checkbox"]:hover { border-color: var(--f-high); }
+input[type="checkbox"]:checked { background: var(--f-high); border-color: var(--f-high); box-shadow: inset 0 0 0 2px var(--panel-out); }
+option { background: var(--panel); color: var(--f-med); }
+option:checked { background: var(--f-low); color: var(--background); }
+/* Where the browser lets the list be styled (customizable select), the
+   options follow the theme too, also the one under the pointer. */
+@supports (appearance: base-select) {
+  select, ::picker(select) { appearance: base-select; }
+  select { display: inline-flex; align-items: center; gap: .4rem; }
+  select::picker-icon { color: var(--f-low); font-size: .7em; }
+  ::picker(select) {
+    background: var(--panel);
+    border: 1px solid var(--f-low);
+    box-shadow: 0 8px 24px var(--shadow);
+    padding: .2rem 0;
+  }
+  option { padding: .15rem .6rem; background: transparent; color: var(--f-med); cursor: pointer; }
+  option::checkmark { display: none; }
+  option:checked { background: transparent; color: var(--f-high); }
+  option:hover, option:focus-visible { background: var(--f-high); color: var(--background); outline: none; }
+}
+
 /* menu bar */
 #menubar { display: flex; align-items: center; }
 .menu { position: relative; }
@@ -140,6 +174,44 @@ label.menu-row { justify-content: space-between; gap: 1rem; }
   border: 1px solid var(--f-low);
   box-shadow: 0 8px 32px var(--shadow);
 }
+/* the make-composite and composite panel dialogs */
+#panelEdit,
+#compose {
+  position: fixed;
+  z-index: 20;
+  top: 15vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(24rem, calc(100vw - 2rem));
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  padding: .5rem;
+  background: var(--panel);
+  border: 1px solid var(--f-low);
+  box-shadow: 0 8px 32px var(--shadow);
+}
+#compose[hidden], #panelEdit[hidden] { display: none; }
+#panelTitle { color: var(--f-high); padding: 0 .4rem; }
+#panelEdit input:not([type]) { font: inherit; padding: .1rem .3rem; background: var(--panel-out); color: var(--f-high); border: 1px solid var(--edge); outline: none; min-width: 0; }
+#panelEdit input:not([type]):disabled { color: var(--f-low); }
+#panelNote { padding: 0 .4rem; color: var(--accent); font-size: 11px; }
+#panelNote:empty { display: none; }
+#panelFields { overflow-y: auto; padding: 0 .4rem; }
+#panelFields fieldset { border: 0; border-top: 1px solid var(--edge); padding: .3rem 0; margin: 0; display: grid; grid-template-columns: 6rem 1fr; gap: .2rem .6rem; align-items: center; }
+#panelFields legend { color: var(--f-high); padding-right: .4rem; }
+#panelFields label { display: flex; align-items: center; gap: .3rem; color: var(--f-med); }
+#composeTitle { color: var(--f-high); padding: 0 .4rem; }
+#compose input:not([type]) { font: inherit; padding: .2rem .4rem; background: var(--panel-out); color: var(--f-high); border: 1px solid var(--edge); outline: none; }
+.compose-hint, #composeNote { padding: 0 .4rem; color: var(--f-low); font-size: 11px; }
+#composeNote:empty { display: none; }
+#composeKnobs { overflow-y: auto; padding: 0 .4rem; }
+#composeKnobs fieldset { border: 0; border-top: 1px solid var(--edge); padding: .3rem 0; margin: 0; display: flex; flex-wrap: wrap; gap: .1rem .8rem; }
+#composeKnobs legend { color: var(--f-high); padding-right: .4rem; }
+#composeKnobs label { display: flex; align-items: center; gap: .25rem; }
+#library button.composite { color: var(--f-high); }
+#library button.composite::after { content: " (composite)"; color: var(--f-low); }
 #ctxTitle { padding: .15rem .4rem .3rem; color: var(--f-low); border-bottom: 1px solid var(--edge); margin-bottom: .2rem; }
 #ctxItems button {
   display: block;
@@ -150,6 +222,25 @@ label.menu-row { justify-content: space-between; gap: 1rem; }
   padding: .2rem .4rem;
 }
 #ctxItems button:hover, #ctxItems button:focus { background: var(--panel-out); color: var(--f-high); outline: none; }
+/* colour swatches in the module menu */
+#ctxItems .swatches { display: flex; flex-wrap: wrap; gap: .25rem; padding: .4rem .4rem .2rem; margin-top: .2rem; border-top: 1px solid var(--edge); max-width: 9.5rem; }
+#ctxItems .swatches button,
+#ctxItems .swatches label {
+  position: relative;
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+  border: 1px solid var(--f-low);
+  background: var(--swatch, var(--panel-out));
+  cursor: pointer;
+}
+#ctxItems .swatches button:hover, #ctxItems .swatches button:focus,
+#ctxItems .swatches label:hover, #ctxItems .swatches label:focus-within { background: var(--swatch, var(--panel-out)); border-color: var(--f-high); outline: none; }
+#ctxItems .swatches .on { box-shadow: inset 0 0 0 2px var(--panel); border-color: var(--f-high); }
+#ctxItems .swatches .none::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top right, transparent calc(50% - .5px), var(--f-low) 50%, transparent calc(50% + .5px)); }
+#ctxItems .swatches .custom::after { content: "+"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--f-high); font-size: 11px; line-height: 1; }
+#ctxItems .swatches label.coloured::after { content: none; }
+#ctxItems .swatches input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
 #search {
   font: inherit;
   margin: .4rem;
@@ -211,14 +302,14 @@ label.menu-row { justify-content: space-between; gap: 1rem; }
   color: var(--f-high);
 }
 #stage { position: relative; flex: 1; min-width: 0; min-height: 0; }
-#rack {
+.scroller {
   position: absolute;
   inset: 0;
   overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--f-low) transparent;
 }
-#sizer { position: relative; overflow: hidden; }
+.sizer { position: relative; overflow: hidden; }
 #patchName {
   font: inherit;
   width: 100%;
@@ -231,7 +322,7 @@ label.menu-row { justify-content: space-between; gap: 1rem; }
 #patchName:focus { outline: none; border-color: var(--f-low); }
 button:disabled { color: var(--f-low); cursor: default; border-color: var(--edge); }
 #patchDelete.confirm { background: var(--accent); color: var(--background); }
-#content {
+.content {
   position: absolute;
   left: 0;
   top: 0;
@@ -247,7 +338,27 @@ button:disabled { color: var(--f-low); cursor: default; border-color: var(--edge
 body.panning, body.panning * { cursor: grabbing !important; }
 .drop { position: absolute; border: 1px dashed var(--f-low); pointer-events: none; }
 .band { position: absolute; z-index: 2; border: 1px solid var(--f-med); background: var(--tint); pointer-events: none; }
-#cables { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cables { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* the edit view of a composite */
+#inner { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; background: var(--background); }
+#inner[hidden] { display: none; }
+#innerBar {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .3rem .5rem;
+  border-bottom: 1px solid var(--edge);
+  background: var(--panel-out);
+}
+#crumbs { flex: 1; min-width: 0; display: flex; align-items: center; gap: .3rem; overflow: hidden; white-space: nowrap; color: var(--f-low); }
+#crumbs button { background: none; border: 0; padding: 0; color: var(--f-med); }
+#crumbs button:hover { color: var(--f-high); text-decoration: underline; text-underline-offset: .2em; }
+#crumbs b { color: var(--f-high); font-weight: 600; }
+#innerStage { position: relative; flex: 1; min-height: 0; }
+/* the jack panels "in" and "out" can't be removed */
+.module.boundary .title { font-style: italic; }
+.module.boundary .title button { display: none; }
 
 .module {
   position: absolute;
@@ -268,6 +379,14 @@ body.panning, body.panning * { cursor: grabbing !important; }
   pointer-events: none;
 }
 .module.selected::after { border-color: var(--accent); }
+/* a module with a colour of its own: the panel takes on some of it, its
+   edge and title more */
+.module.coloured {
+  --panel: color-mix(in srgb, var(--tone) 22%, var(--panel-0));
+  --panel-out: color-mix(in srgb, var(--tone) 14%, var(--panel-out-0));
+  --edge: color-mix(in srgb, var(--tone) 45%, var(--edge-0));
+}
+.module.coloured .title { color: color-mix(in srgb, var(--tone) 55%, var(--f-high-0)); }
 .module.dragging { z-index: 1; opacity: .85; box-shadow: 0 6px 24px var(--shadow); }
 .module.dragging .title { cursor: grabbing; }
 
@@ -293,6 +412,12 @@ body.panning, body.panning * { cursor: grabbing !important; }
   visibility: hidden;
 }
 .module:hover .title button, .title button:focus-visible { visibility: visible; }
+.title .name { display: flex; align-items: center; gap: .35rem; min-width: 0; overflow: hidden; }
+.title .name span { overflow: hidden; text-overflow: ellipsis; }
+/* the mark of a composite, always shown; it opens the composite */
+.title button.open { visibility: visible; display: flex; padding: .1rem; color: var(--f-med); }
+.title button.open:hover { color: var(--f-high); }
+.title button.open svg { width: 9px; height: 9px; fill: var(--panel); stroke: currentColor; stroke-width: 1; overflow: visible; }
 
 /* the text of a note module */
 .text {

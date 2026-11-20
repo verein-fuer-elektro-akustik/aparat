@@ -1,6 +1,7 @@
 import { registry } from '../modules/index.js';
 import { makeKnob } from './knob.js';
 import { colours } from './theme.js';
+import { defFinder, dependents, flatten, usedComposites } from './composite.js';
 
 // The rack is a grid of square cells. A module is CELLS cells tall, so the
 // rack is made of rows CELLS cells high. A module is as many cells wide as it
@@ -45,8 +46,9 @@ function peaksOf(samples) {
 }
 
 export class Rack {
-  constructor({ scroller, sizer, content, cables, send, onChange, onContextMenu, files, onFile }) {
+  constructor({ scroller, sizer, content, cables, send, onChange, onContextMenu, onOpen, files, onFile }) {
     this.onContextMenu = onContextMenu ?? (() => {});
+    this.onOpen = onOpen ?? (() => {}); // double-click on a module's title
     // audio files of modules like the sampler: files.get(name) is the loaded
     // file or undefined, onFile(m, file) is asked to load one (file: a dropped
     // File, or null to let the user choose)
@@ -63,6 +65,10 @@ export class Rack {
     this.nextId = 1;
     this.freeSlots = [];
     this.nextSlot = 0;
+    // the patch's composites by name, and the def of any type
+    this.composites = {};
+    this.extraDefs = {}; // types only this rack knows (the edit view's jack panels)
+    this.defOf = defFinder(registry, {});
     this.selection = new Set();
     this.learning = null;
     this.dragging = false; // a module or cable is being dragged
@@ -118,8 +124,8 @@ export class Rack {
 
   // patch editing
 
-  add(type, { id, x, row, params, data } = {}) {
-    const def = registry[type];
+  add(type, { id, x, row, params, data, color } = {}) {
+    const def = this.defOf(type);
     if (!def) return null;
     const keys = Object.keys(def.params);
     const defsList = Object.values(def.params);
@@ -138,6 +144,7 @@ export class Rack {
     };
     this.nextId = Math.max(this.nextId, m.id + 1);
     this.buildPanel(m);
+    this.paintColour(m, color);
     const spot = x === undefined ? this.findSpot(def.cols) : { x, row };
     m.x = spot.x;
     m.row = spot.row;
@@ -148,6 +155,21 @@ export class Rack {
     this.updateExtent();
     this.onChange();
     return m;
+  }
+
+  // A module's own colour (a #rrggbb, or none): its panel is tinted with it
+  // (see .module.coloured in style.css), so it works in both themes.
+  setColour(m, color) {
+    if (!this.live(m)) return;
+    this.paintColour(m, color);
+    this.onChange();
+  }
+
+  paintColour(m, color) {
+    m.color = /^#[0-9a-f]{6}$/i.test(color ?? '') ? color.toLowerCase() : null;
+    m.el.classList.toggle('coloured', !!m.color);
+    if (m.color) m.el.style.setProperty('--tone', m.color);
+    else m.el.style.removeProperty('--tone');
   }
 
   // Undo and redo rebuild modules as new objects with the same id, so a menu
@@ -164,7 +186,7 @@ export class Rack {
     this.midiMap = this.midiMap.filter((e) => e.id !== m.id);
     if (this.learning?.m === m) this.learning = null;
     this.selection.delete(m);
-    this.send({ op: 'remove', id: m.id });
+    this.sendRemove(m);
     m.el.remove();
     this.modules.delete(m.id);
     this.updateExtent();
@@ -188,8 +210,10 @@ export class Rack {
 
   disconnect(cable) {
     this.cables.remove(cable);
-    this.freeSlots.push(cable.slot);
-    this.send({ op: 'disconnect', slot: cable.slot });
+    for (const slot of [cable.slot, ...(cable.extra ?? [])]) {
+      this.freeSlots.push(slot);
+      this.send({ op: 'disconnect', slot });
+    }
     this.updateExtent();
     this.onChange();
   }
@@ -198,6 +222,7 @@ export class Rack {
     for (const m of [...this.modules.values()]) this.remove(m);
     this.freeSlots = [];
     this.nextSlot = 0;
+    this.setComposites({});
     this.nextId = 1;
     this.midiMap = [];
   }
@@ -232,9 +257,10 @@ export class Rack {
 
   // A copy with the same settings, right of the original.
   duplicate(m) {
-    if (!this.live(m)) return null;
+    if (!this.live(m) || m.def.boundary) return null;
     const params = Object.fromEntries(m.keys.map((k, i) => [k, m.values[i]]));
     const copy = this.insert(m.type, { x: m.x + m.def.cols, row: m.row }, params, m.data && { ...m.data });
+    if (copy) this.paintColour(copy, m.color);
     this.select(copy);
     return copy;
   }
@@ -242,18 +268,39 @@ export class Rack {
   // The given modules (default: the selection) with the cables between them,
   // in the format of patch files.
   copy(mods = [...this.selection]) {
-    const ids = new Set(mods.filter((m) => this.live(m)).map((m) => m.id));
+    const ids = new Set(mods.filter((m) => this.live(m) && !m.def.boundary).map((m) => m.id));
     const all = this.toJSON();
+    const modules = all.modules.filter((m) => ids.has(m.id));
     return {
-      modules: all.modules.filter((m) => ids.has(m.id)),
+      modules,
       cables: all.cables.filter((c) => ids.has(c.from[0]) && ids.has(c.to[0])),
+      composites: usedComposites(modules, this.composites),
     };
+  }
+
+  // Composites from elsewhere (paste): a name already used for a different
+  // composite gets a number. Returns the names as they are here.
+  mergeComposites(incoming = {}) {
+    const rename = {};
+    const merged = { ...this.composites };
+    for (const [name, spec] of Object.entries(incoming)) {
+      let n = name;
+      for (let k = 2; (merged[n] || registry[n]) && JSON.stringify(merged[n]) !== JSON.stringify(spec); k++) n = `${name} ${k}`;
+      rename[name] = n;
+    }
+    // inner references follow the renames
+    for (const [name, spec] of Object.entries(incoming)) {
+      merged[rename[name]] = { ...spec, modules: spec.modules.map((m) => ({ ...m, type: rename[m.type] ?? m.type })) };
+    }
+    this.setComposites(merged);
+    return rename;
   }
 
   // Add what copy() returned, also from another patch: in new rows below the
   // rack, laid out as they were, and selected.
   paste(data) {
-    const list = (data?.modules ?? []).filter((p) => registry[p.type]);
+    const rename = this.mergeComposites(data?.composites);
+    const list = (data?.modules ?? []).map((p) => ({ ...p, type: rename[p.type] ?? p.type })).filter((p) => this.defOf(p.type));
     if (!list.length) return [];
     const top = Math.min(...list.map((p) => p.row ?? 0));
     const left = Math.min(...list.map((p) => p.x ?? 0));
@@ -261,7 +308,7 @@ export class Rack {
     const made = new Map();
     for (const p of list) {
       const spot = { x: (p.x ?? 0) - left, row: (p.row ?? 0) - top + below };
-      made.set(p.id, this.add(p.type, { ...spot, params: p.params, data: p.data && { ...p.data } }));
+      made.set(p.id, this.add(p.type, { ...spot, params: p.params, data: p.data && { ...p.data }, color: p.color }));
     }
     this.unoverlap();
     for (const c of data.cables ?? []) {
@@ -318,9 +365,44 @@ export class Rack {
 
   // engine
 
+  slot() {
+    return this.freeSlots.length ? this.freeSlots.pop() : this.nextSlot++;
+  }
+
+  // A composite goes to the engine as its inner modules and cables (see
+  // composite.js); m.flat says where its jacks and knobs lead.
   sendAdd(m) {
-    this.send({ op: 'add', id: m.id, type: m.type, params: m.values });
-    this.sendFile(m);
+    if (!m.def.composite) {
+      this.send({ op: 'add', id: m.id, type: m.type, params: m.values });
+      this.sendFile(m);
+      return;
+    }
+    const values = Object.fromEntries(m.keys.map((k, i) => [k, m.values[i]]));
+    m.flat = flatten(m.def.composite, String(m.id), values, this.defOf);
+    m.innerSlots ??= m.flat.cables.map(() => this.slot());
+    for (const x of m.flat.modules) {
+      this.send({ op: 'add', id: x.id, type: x.type, params: x.params });
+      if (registry[x.type].file && x.data?.name) this.send({ op: 'data', id: x.id, data: this.files.get(x.data.name) ?? null });
+    }
+    m.flat.cables.forEach((c, k) => this.send({ op: 'connect', slot: m.innerSlots[k], from: c.from, to: c.to }));
+  }
+
+  sendRemove(m) {
+    if (!m.flat) {
+      this.send({ op: 'remove', id: m.id });
+      return;
+    }
+    for (const slot of m.innerSlots ?? []) {
+      this.send({ op: 'disconnect', slot });
+      this.freeSlots.push(slot);
+    }
+    m.innerSlots = null;
+    for (const x of m.flat.modules) this.send({ op: 'remove', id: x.id });
+  }
+
+  sendParam(m, i, v) {
+    const at = m.flat ? m.flat.params[i] : [m.id, i];
+    if (at) this.send({ op: 'param', id: at[0], i: at[1], v });
   }
 
   sendFile(m) {
@@ -353,8 +435,15 @@ export class Rack {
     return [...new Set([...this.modules.values()].filter((m) => m.def.file && m.data?.name).map((m) => m.data.name))];
   }
 
+  // A cable into a composite may lead to several inner inputs; the first one
+  // uses the cable's slot, the others get slots of their own.
   sendConnect(c) {
-    this.send({ op: 'connect', slot: c.slot, from: [c.from.m.id, c.from.i], to: [c.to.m.id, c.to.i] });
+    const from = c.from.m.flat ? c.from.m.flat.outputs[c.from.i] : [c.from.m.id, c.from.i];
+    const to = c.to.m.flat ? c.to.m.flat.inputs[c.to.i] ?? [] : [[c.to.m.id, c.to.i]];
+    if (!from) return;
+    c.extra ??= [];
+    while (c.extra.length < to.length - 1) c.extra.push(this.slot());
+    to.forEach((t, k) => this.send({ op: 'connect', slot: k ? c.extra[k - 1] : c.slot, from, to: t }));
   }
 
   replay() {
@@ -375,17 +464,26 @@ export class Rack {
         row: m.row,
         params: Object.fromEntries(m.keys.map((k, i) => [k, m.values[i]])),
         ...(m.data ? { data: m.data } : {}),
+        ...(m.color ? { color: m.color } : {}),
       })),
       cables: this.cables.list.map((c) => ({
         from: [c.from.m.id, c.from.m.def.outputs[c.from.i]],
         to: [c.to.m.id, Object.keys(c.to.m.def.inputs)[c.to.i]],
       })),
       midiMap: this.midiMap,
+      composites: usedComposites([...this.modules.values()], this.composites),
     };
+  }
+
+  setComposites(composites) {
+    this.composites = { ...composites };
+    const find = defFinder(registry, this.composites);
+    this.defOf = (type) => this.extraDefs[type] ?? find(type);
   }
 
   load(patch) {
     this.clear();
+    this.setComposites(patch.composites ?? {});
     // version 1 placed modules on a 15 px grid
     const scale = (patch.v ?? 1) < 2 ? 15 / CELL : 1;
     for (const p of patch.modules ?? []) {
@@ -409,10 +507,22 @@ export class Rack {
   // Modules that stay keep their engine state, so undoing a knob turn does
   // not cut the reverb tail or reset an oscillator.
   apply(patch) {
+    // modules of a composite whose inside changed are made anew
+    const before = this.composites;
+    const after = patch.composites ?? {};
+    // a composite has changed when it or one it contains has
+    const changedSet = new Set();
+    for (const name of new Set([...Object.keys(before), ...Object.keys(after)])) {
+      if (name in after && JSON.stringify(before[name]) !== JSON.stringify(after[name])) {
+        for (const n of dependents(name, { ...before, ...after })) changedSet.add(n);
+      }
+    }
+    const changed = (type) => changedSet.has(type);
     const want = new Map(patch.modules.map((p) => [p.id, p]));
     for (const m of [...this.modules.values()]) {
-      if (want.get(m.id)?.type !== m.type) this.remove(m);
+      if (want.get(m.id)?.type !== m.type || (m.def.composite && changed(m.type))) this.remove(m);
     }
+    this.setComposites({ ...before, ...after });
     for (const p of patch.modules) {
       const m = this.modules.get(p.id);
       if (!m) {
@@ -422,6 +532,7 @@ export class Rack {
       m.x = p.x;
       m.row = p.row;
       this.place(m);
+      if ((p.color ?? null) !== m.color) this.paintColour(m, p.color);
       if (JSON.stringify(m.data) !== JSON.stringify(p.data ?? null)) {
         m.data = p.data ?? null;
         if (m.textArea) m.textArea.value = m.data?.text ?? '';
@@ -432,7 +543,7 @@ export class Rack {
         if (v === m.values[i]) return;
         m.values[i] = v;
         m.knobs[i].setValue(v);
-        this.send({ op: 'param', id: m.id, i, v });
+        this.sendParam(m, i, v);
       });
       if (m.def.shape) this.queuePaint(m);
     }
@@ -501,7 +612,7 @@ export class Rack {
 
   buildPanel(m) {
     const { def } = m;
-    const el = div('module', this.content);
+    const el = div(def.boundary ? 'module boundary' : 'module', this.content);
     el.style.width = `${def.cols * CELL}px`;
     el.style.height = `${ROW}px`;
     el.style.setProperty('--cols', def.cols);
@@ -509,13 +620,29 @@ export class Rack {
 
     const title = div('title', el);
     const name = document.createElement('span');
-    name.textContent = m.type;
+    name.textContent = def.boundary ? def.name : m.type;
     const close = document.createElement('button');
     close.textContent = '×';
     close.setAttribute('aria-label', `remove ${m.type}`);
     close.addEventListener('click', () => this.remove(m));
-    title.append(name, close);
+    const label = document.createElement('div');
+    label.className = 'name';
+    label.append(name);
+    // a composite is marked with two stacked squares, which also open it
+    if (def.composite) {
+      const open = document.createElement('button');
+      open.className = 'open';
+      open.title = 'composite: click to edit its inside';
+      open.setAttribute('aria-label', `edit composite ${m.type}`);
+      open.innerHTML = '<svg viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="6" height="6"/><rect x="3.5" y="3.5" width="6" height="6"/></svg>';
+      open.addEventListener('click', () => this.onOpen(m));
+      label.append(open);
+    }
+    title.append(label, close);
     title.addEventListener('pointerdown', (e) => this.startMove(e, m));
+    title.addEventListener('dblclick', (e) => {
+      if (!e.target.closest('button')) this.onOpen(m);
+    });
     // shift or ctrl adds to (or takes from) the selection; a module that is
     // part of a selection keeps it, so the group can be dragged or right-clicked
     el.addEventListener('pointerdown', (e) => {
@@ -575,7 +702,7 @@ export class Rack {
           def: list[i],
           value: m.values[i],
           onChange: (v) => {
-            this.send({ op: 'param', id: m.id, i, v });
+            this.sendParam(m, i, v);
             if (m.def.shape) this.queuePaint(m);
             // a push button plays, it does not change the patch
             if (list[i].momentary) return;
@@ -965,7 +1092,7 @@ export class Rack {
   }
 
   startMove(e, m) {
-    if (e.button !== 0 || e.target.tagName === 'BUTTON') return;
+    if (e.button !== 0 || e.target.closest('button')) return;
     e.preventDefault();
     if (this.selection.size > 1 && this.selection.has(m) && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       this.startGroupMove(e);

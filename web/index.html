@@ -119,8 +119,35 @@
 <div id="error" role="alert"></div>
 <div id="dropzone" hidden><span></span></div>
 <div id="stage">
-  <div id="rack"><div id="sizer"><div id="content"></div></div></div>
-  <canvas id="cables"></canvas>
+  <div id="rack" class="scroller"><div id="sizer" class="sizer"><div id="content" class="content"></div></div></div>
+  <canvas id="cables" class="cables"></canvas>
+  <!-- the inside of a composite, over the patch while it is edited -->
+  <div id="inner" hidden>
+    <div id="innerBar">
+      <nav id="crumbs" aria-label="where you are"></nav>
+      <button id="innerPanel" title="its jacks, knobs and description">panel</button>
+      <button id="innerDone" title="back to the patch (esc)">done</button>
+    </div>
+    <div id="innerStage">
+      <div id="innerRack" class="scroller"><div id="innerSizer" class="sizer"><div id="innerContent" class="content"></div></div></div>
+      <canvas id="innerCables" class="cables"></canvas>
+    </div>
+  </div>
+</div>
+<div id="panelEdit" role="dialog" aria-labelledby="panelTitle" hidden>
+  <div id="panelTitle">panel</div>
+  <label class="menu-row">description <input id="panelDoc" autocomplete="off" maxlength="200"></label>
+  <div id="panelFields"></div>
+  <p id="panelNote"></p>
+  <div class="menu-row"><button id="panelOk">apply</button><button id="panelCancel">cancel</button></div>
+</div>
+<div id="compose" role="dialog" aria-labelledby="composeTitle" hidden>
+  <div id="composeTitle">make composite</div>
+  <label class="menu-row">name <input id="composeName" autocomplete="off" spellcheck="false" maxlength="40"></label>
+  <p class="compose-hint">knobs to show on its panel; cables to other modules become its jacks</p>
+  <div id="composeKnobs"></div>
+  <p id="composeNote"></p>
+  <div class="menu-row"><button id="composeOk">make</button><button id="composeCancel">cancel</button></div>
 </div>
 <div id="ctx" role="menu" aria-labelledby="ctxTitle" hidden>
   <div id="ctxTitle"></div>
@@ -135,8 +162,9 @@
     <li>drag a module by its title, neighbours make room, esc cancels</li>
     <li>drag jacks to patch, pull a cable off a jack to move or remove it</li>
     <li>ctrl-drag a jack for another cable</li>
-    <li>double-click a knob to reset, right-click it for midi learn</li>
-    <li>right-click a module: random, reset, duplicate, copy, remove, help</li>
+    <li>drag or wheel a knob, double-click to reset, right-click for midi learn</li>
+    <li>right-click a module: random, reset, duplicate, copy, remove, make composite, help, colour</li>
+    <li>double-click a composite's title to edit its inside</li>
     <li>right-click empty space opens this menu</li>
     <li>shift-click modules or shift-drag empty space to select several</li>
     <li>delete removes the selected modules or cable</li>

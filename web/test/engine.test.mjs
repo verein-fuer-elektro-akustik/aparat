@@ -23,6 +23,7 @@ globalThis.registerProcessor = (name, cls) => {
 await import('../engine/processor.js');
 const { defs, registry } = await import('../modules/index.js');
 const { newPatch } = await import('../ui/new-patch.js');
+const { defFinder, flattenPatch, makeComposite, ungroup, insidePatch, specFromInside, renamePanel, instancePrefixes, IN_TYPE, OUT_TYPE } = await import('../ui/composite.js');
 
 // An engine with a patch in the format of patch files.
 function engine(patch = { modules: [], cables: [] }) {
@@ -333,6 +334,118 @@ test('lfo pulse width', () => {
   const a = e.render(1);
   const high = a.filter((v) => v > 0).length / a.length;
   assert.ok(Math.abs(high - 0.2) < 0.01, `high ${high}`);
+});
+
+// the starter patch with its voice (vco, vcf, env, vca) made into a composite
+function voicePatch() {
+  const ids = newPatch.modules.filter((m) => ['vco', 'vcf', 'env', 'vca'].includes(m.type)).map((m) => m.id);
+  const vcf = newPatch.modules.find((m) => m.type === 'vcf').id;
+  return makeComposite(newPatch, ids, 'voice', [{ id: vcf, param: 'cutoff' }], defFinder(registry, {}));
+}
+
+test('a composite keeps the patch playing', () => {
+  const patch = voicePatch();
+  const voice = patch.modules.find((m) => m.type === 'voice');
+  assert.equal(patch.modules.length, newPatch.modules.length - 3);
+  assert.deepEqual(Object.keys(voice.params), ['cutoff']);
+  const def = defFinder(registry, patch.composites)('voice');
+  // midi in's pitch and gate come in, the vca's out goes to output and scope
+  assert.deepEqual(Object.keys(def.inputs).sort(), ['gate', 'pitch']);
+  assert.deepEqual(def.outputs, ['out']);
+  const e = engine(flattenPatch(patch, registry));
+  assert.equal(peak(e.render(0.2)), 0);
+  e.midi(0x90, 57, 100);
+  assert.ok(peak(e.render(0.3)) > 0.1);
+});
+
+test('the composite knob reaches the inner module', () => {
+  const patch = voicePatch();
+  const bright = structuredClone(patch);
+  bright.modules.find((m) => m.type === 'voice').params.cutoff = 8000;
+  const dark = structuredClone(patch);
+  dark.modules.find((m) => m.type === 'voice').params.cutoff = 100;
+  const loud = (p) => {
+    const e = engine(flattenPatch(p, registry));
+    e.midi(0x90, 57, 100);
+    const a = e.render(0.3);
+    return Math.sqrt(a.reduce((s, v) => s + v * v, 0) / a.length);
+  };
+  assert.ok(loud(bright) > loud(dark) * 2, `${loud(bright)} ${loud(dark)}`);
+});
+
+test('ungroup gives back the same modules and cables', () => {
+  const patch = voicePatch();
+  const voice = patch.modules.find((m) => m.type === 'voice');
+  const back = ungroup(patch, voice.id, defFinder(registry, patch.composites));
+  const sig = (p) => {
+    const type = new Map(p.modules.map((m) => [m.id, m.type]));
+    return {
+      modules: p.modules.map((m) => `${m.type} ${JSON.stringify(m.params ?? {})}`).sort(),
+      cables: p.cables.map((c) => `${type.get(c.from[0])}.${c.from[1]}>${type.get(c.to[0])}.${c.to[1]}`).sort(),
+    };
+  };
+  assert.deepEqual(sig(back), sig(newPatch));
+});
+
+test('a composite inside a composite', () => {
+  const inner = voicePatch();
+  const voice = inner.modules.find((m) => m.type === 'voice').id;
+  const midi = inner.modules.find((m) => m.type === 'midi in').id;
+  const outer = makeComposite(inner, [voice, midi], 'synth', [{ id: voice, param: 'cutoff' }], defFinder(registry, inner.composites));
+  assert.ok(outer.composites.synth && outer.composites.voice);
+  const e = engine(flattenPatch(outer, registry));
+  e.midi(0x90, 57, 100);
+  assert.ok(peak(e.render(0.3)) > 0.1);
+});
+
+test('the edit view gives back the composite it shows', () => {
+  const patch = voicePatch();
+  const spec = patch.composites.voice;
+  const inside = insidePatch(spec, patch.composites);
+  assert.equal(inside.modules.filter((m) => m.type === IN_TYPE || m.type === OUT_TYPE).length, 2);
+  const back = specFromInside(inside, spec);
+  const strip = (s) => ({ ...s, layout: undefined, modules: s.modules.map((m) => ({ ...m, x: undefined })) });
+  assert.deepEqual(strip(back), strip(spec));
+});
+
+test('the edit view adds a jack from +, drops one without cables', () => {
+  const patch = voicePatch();
+  const spec = patch.composites.voice;
+  const inside = insidePatch(spec, patch.composites);
+  const IN = inside.modules.find((m) => m.type === IN_TYPE).id;
+  const OUT = inside.modules.find((m) => m.type === OUT_TYPE).id;
+  const vcf = spec.modules.find((m) => m.type === 'vcf').id;
+  const env = spec.modules.find((m) => m.type === 'env').id;
+  // a new input to the filter's res, a new output from the envelope
+  inside.cables.push({ from: [IN, '+'], to: [vcf, 'res'] }, { from: [env, 'out'], to: [OUT, '+'] });
+  // the gate input loses its cable
+  inside.cables = inside.cables.filter((c) => !(c.from[0] === IN && c.from[1] === 'gate'));
+  const back = specFromInside(inside, spec);
+  assert.deepEqual(back.inputs.map((j) => j.name), ['pitch', 'res']);
+  assert.deepEqual(back.outputs.map((j) => j.name), ['out', 'out 2']);
+  assert.deepEqual(back.outputs[1].from, [env, 'out']);
+});
+
+test('renaming a composite jack and knob keeps the patch wired', () => {
+  const patch = voicePatch();
+  const renamed = renamePanel(patch, 'voice', { inputs: { pitch: 'v/oct' }, outputs: { out: 'audio' }, params: { cutoff: 'tone' } });
+  const voice = renamed.modules.find((m) => m.type === 'voice');
+  assert.deepEqual(Object.keys(voice.params), ['tone']);
+  assert.ok(renamed.cables.some((c) => c.to[0] === voice.id && c.to[1] === 'v/oct'));
+  assert.ok(renamed.cables.some((c) => c.from[0] === voice.id && c.from[1] === 'audio'));
+  const e = engine(flattenPatch(renamed, registry));
+  e.midi(0x90, 57, 100);
+  assert.ok(peak(e.render(0.3)) > 0.1);
+});
+
+test('instance prefixes reach composites inside composites', () => {
+  const inner = voicePatch();
+  const voice = inner.modules.find((m) => m.type === 'voice').id;
+  const midi = inner.modules.find((m) => m.type === 'midi in').id;
+  const outer = makeComposite(inner, [voice, midi], 'synth', [], defFinder(registry, inner.composites));
+  const synth = outer.modules.find((m) => m.type === 'synth').id;
+  assert.deepEqual(instancePrefixes('voice', outer.modules, outer.composites), [`${synth}/${voice}`]);
+  assert.deepEqual(instancePrefixes('synth', outer.modules, outer.composites), [`${synth}`]);
 });
 
 // The factory patches live with the server. "default" is what the app starts

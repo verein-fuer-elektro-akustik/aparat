@@ -128,6 +128,30 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
     el.addEventListener('pointercancel', up);
   });
 
+  // The wheel turns the knob under the pointer: about 50 notches for the whole
+  // range, ten times finer with shift; stepped knobs move one step per notch.
+  // Trackpads send many small deltas, so they add up. ctrl+wheel is left to
+  // the rack's zoom, and buttons ignore the wheel, so scrolling past one does
+  // not flip it.
+  let wheel = 0;
+  el.addEventListener('wheel', (e) => {
+    if (e.ctrlKey || e.metaKey || toggle) return;
+    e.preventDefault();
+    // shift+wheel scrolls sideways in some browsers, so take either axis
+    const d = (Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX) * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1);
+    wheel -= d / 100; // a notch is about 100 pixels
+    const notches = wheel > 0 ? Math.floor(wheel) : Math.ceil(wheel);
+    if (def.step) {
+      if (!notches) return;
+      wheel -= notches;
+      setNorm(norm + notches / ((def.max - def.min) / def.step));
+    } else {
+      setNorm(norm + wheel * (e.shiftKey ? 0.002 : 0.02));
+      wheel = 0;
+    }
+    show(true);
+  }, { passive: false });
+
   el.addEventListener('keyup', (e) => {
     if (def.momentary && (e.key === ' ' || e.key === 'Enter')) setNorm(0);
   });
