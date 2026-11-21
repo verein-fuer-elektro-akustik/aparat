@@ -22,6 +22,7 @@ export default {
   cols: 3,
   inputs: { pitch: 0, fm: 0, pw: 0, sync: 0 },
   outputs: ['sin', 'tri', 'saw', 'squ'],
+  kinds: { in: { pitch: 'pitch', sync: 'gate' } },
   params: {
     tune: { min: -4, max: 4, default: 0, format: (v) => `${(C4 * 2 ** v).toFixed(1)} hz` },
     fm: { min: 0, max: 1, default: 0 },

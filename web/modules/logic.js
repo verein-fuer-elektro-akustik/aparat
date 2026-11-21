@@ -6,6 +6,7 @@ export default {
   cols: 2,
   inputs: { a: 0, b: 0 },
   outputs: ['and', 'or', 'xor', 'not a'],
+  kinds: { in: { a: 'gate', b: 'gate' }, out: { and: 'gate', or: 'gate', xor: 'gate', 'not a': 'gate' } },
   lights: ['and', 'or', 'xor', 'not a'],
   params: {},
   create: () => ({}),

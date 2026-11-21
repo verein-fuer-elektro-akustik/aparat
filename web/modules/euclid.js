@@ -25,6 +25,7 @@ export default {
   cols: 4,
   inputs: { clock: 0, reset: 0, h1: 0, h2: 0, h3: 0, h4: 0 },
   outputs: ['1', '2', '3', '4'],
+  kinds: { in: { clock: 'gate', reset: 'gate' }, out: { '1': 'gate', '2': 'gate', '3': 'gate', '4': 'gate' } },
   lights: ['1', '2', '3', '4'],
   params: {
     len1: len, len2: len, len3: len, len4: len,

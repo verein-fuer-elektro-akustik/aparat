@@ -1490,7 +1490,17 @@ window.addEventListener('keydown', (e) => {
     if (e.key === '-') return zoomTo(zoomStep(-1), ...at);
     if (e.key === '0') return zoomTo(1, ...at);
   }
-  if ((e.key === 'Delete' || e.key === 'Backspace') && menu.hidden) removeSelection();
+  if ((e.key === 'Delete' || e.key === 'Backspace') && menu.hidden) {
+    // the cable under the pointer goes first, then the selection
+    const c = rack.hoverCable;
+    if (c && rack.cables.list.includes(c)) {
+      rack.disconnect(c);
+      rack.hoverCable = null;
+      rack.cables.setHighlight(null);
+    } else {
+      removeSelection();
+    }
+  }
 });
 
 // Key learn and linked keys (see rack.keyDown). Keys with a job of their own

@@ -72,6 +72,14 @@ test('every module has a name and a doc', () => {
   assert.equal(new Set(defs.map((d) => d.name)).size, defs.length);
 });
 
+test('kinds and lights name real jacks', () => {
+  for (const d of defs) {
+    for (const [name, kind] of Object.entries(d.kinds?.in ?? {})) assert.ok(name in d.inputs && ['gate', 'pitch'].includes(kind), `${d.name} in ${name}`);
+    for (const [name, kind] of Object.entries(d.kinds?.out ?? {})) assert.ok(d.outputs.includes(name) && ['gate', 'pitch'].includes(kind), `${d.name} out ${name}`);
+    for (const name of d.lights ?? []) assert.ok(d.outputs.includes(name), `${d.name} light ${name}`);
+  }
+});
+
 test('every module runs with any setting without producing nan', () => {
   let seed = 1;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -260,6 +268,17 @@ test('meter reads level and pitch, vco sync follows the master', () => {
   assert.ok(Math.abs(d[0] - 5) < 0.01 && Math.abs(d[1] - 5 / Math.SQRT2) < 0.01);
   assert.ok(Math.abs(d[2] - 440) < 0.5);
   assert.deepEqual(registry.meter.displayText(d).slice(2), ['a4 +0 ct', '440.0 hz']);
+  // the bar: peak at 0 db; held while the level falls in silence, then let go
+  assert.ok(Math.abs(d[3]) < 0.01, `bar peak ${d[3]}`);
+  const frame = (n) => {
+    for (let i = 0; i < n; i++) registry.meter.process(s, [0], o);
+    return [...registry.meter.display(s)];
+  };
+  const soon = frame(SR / 2);
+  assert.ok(soon[3] < -11 && soon[3] > -13 && Math.abs(soon[5]) < 0.01, `falling ${soon[3]}, held ${soon[5]}`);
+  for (let k = 0; k < 4; k++) frame(SR / 2);
+  const later = frame(SR / 30);
+  assert.ok(later[5] < -50 && later[4] < -50, `let go ${later[5]} ${later[4]}`);
 
   const e = engine({
     modules: [
@@ -525,6 +544,8 @@ test('a composite keeps the patch playing', () => {
   // midi in's pitch and gate come in, the vca's out goes to output and scope
   assert.deepEqual(Object.keys(def.inputs).sort(), ['gate', 'pitch']);
   assert.deepEqual(def.outputs, ['out']);
+  // the jacks keep the kinds of the jacks they lead to
+  assert.deepEqual(def.kinds, { in: { pitch: 'pitch', gate: 'gate' }, out: {} });
   const e = engine(flattenPatch(patch, registry));
   assert.equal(peak(e.render(0.2)), 0);
   e.midi(0x90, 57, 100);

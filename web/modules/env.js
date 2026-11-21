@@ -23,6 +23,7 @@ export default {
   cols: 2,
   inputs: { gate: 0 },
   outputs: ['out'],
+  kinds: { in: { gate: 'gate' } },
   params: {
     a: time(0.005),
     d: time(0.2),

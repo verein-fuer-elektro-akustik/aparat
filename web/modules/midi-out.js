@@ -13,6 +13,7 @@ export default {
   cols: 3,
   inputs: { pitch: 0, gate: 0, vel: 8 },
   outputs: ['pitch', 'gate', 'vel'],
+  kinds: { in: { pitch: 'pitch', gate: 'gate' }, out: { pitch: 'pitch', gate: 'gate' } },
   lights: ['gate'],
   params: {
     channel: { min: 1, max: 16, default: 1, step: 1, format: (v) => `${v}` },

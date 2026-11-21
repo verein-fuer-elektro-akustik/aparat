@@ -103,6 +103,11 @@ import portal from './portal.js';
 //   file                 optional, the panel can load an audio file, which
 //                        arrives as onData(s, {samples, sr}) (null: none)
 //   text                 optional, the panel is a text field kept in the patch
+//   kinds                optional, {in: {name: kind}, out: {name: kind}}:
+//                        jacks that carry gates or triggers ('gate') or
+//                        1 V/oct ('pitch'). The panel draws them a little
+//                        differently and names the kind on hover; anything
+//                        still patches into anything
 //   lights               optional, [output names] whose jacks light up with
 //                        their level (fully at 5 V): gates, triggers and
 //                        controllers, so their events show

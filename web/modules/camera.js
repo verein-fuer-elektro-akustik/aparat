@@ -18,6 +18,7 @@ export default {
   cols: 4,
   inputs: {},
   outputs: OUTPUTS,
+  kinds: { out: { gate: 'gate' } },
   lights: ['motion', 'gate', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
   params: {
     gain: { min: 0.1, max: 10, default: 1, curve: 'exp', format: (v) => `${v.toFixed(2)}x` },

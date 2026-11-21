@@ -30,9 +30,10 @@ function row(label, items) {
 }
 
 function entry(def) {
+  const kind = (dir, name) => ({ gate: ' gate', pitch: ' 1 V/oct' })[def.kinds?.[dir]?.[name]] ?? '';
   const inputs = Object.entries(def.inputs).map(([name, v]) =>
-    build('li', {}, [build('b', { textContent: name }, []), v ? ` (${v} V)` : '']));
-  const outputs = def.outputs.map((name) => build('li', {}, [build('b', { textContent: name }, [])]));
+    build('li', {}, [build('b', { textContent: name }, []), kind('in', name), v ? ` (${v} V)` : '']));
+  const outputs = def.outputs.map((name) => build('li', {}, [build('b', { textContent: name }, []), kind('out', name)]));
   const knobs = Object.entries(def.params).map(([name, p]) => knob(name, p));
   return build('article', { id: anchor(def.name) }, [
     build('h3', { textContent: def.name }, []),

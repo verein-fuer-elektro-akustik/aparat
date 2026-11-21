@@ -10,6 +10,7 @@ export default {
   cols: 3,
   inputs: { in: 0, time: 0, fb: 0, sync: 0 },
   outputs: ['out'],
+  kinds: { in: { sync: 'gate' } },
   bypass: { out: 'in' },
   params: {
     time: { min: 0.001, max: 2, default: 0.25, curve: 'exp', format: (v) => `${v.toFixed(3)} s` },

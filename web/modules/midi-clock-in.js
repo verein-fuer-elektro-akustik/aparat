@@ -6,6 +6,7 @@ export default {
   cols: 3,
   inputs: {},
   outputs: ['clock', 'start', 'stop'],
+  kinds: { out: { clock: 'gate', start: 'gate', stop: 'gate' } },
   lights: ['clock', 'start', 'stop'],
   params: {},
   create: (sr) => ({ width: Math.round(sr * PULSE_SECONDS), clock: 0, start: 0, stop: 0 }),

@@ -561,3 +561,19 @@ body.panning, body.panning * { cursor: grabbing !important; }
   color: var(--f-med);
   text-transform: none;
 }
+
+/* Jack kinds (def.kinds): gates and triggers are a rounded square, pitch
+   (1 V/oct) has a dot in the middle. Only a hint, anything patches anywhere. */
+.jack.gate { border-radius: 5px; }
+.jack.pitch { position: relative; }
+.jack.pitch::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: var(--f-med);
+}

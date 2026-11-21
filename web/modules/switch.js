@@ -7,6 +7,7 @@ export default {
   cols: 3,
   inputs: { 1: 0, 2: 0, 3: 0, 4: 0, clock: 0, reset: 0 },
   outputs: ['out'],
+  kinds: { in: { clock: 'gate', reset: 'gate' } },
   params: { steps: { min: 2, max: 4, default: 4, step: 1, format: (v) => `${v}` } },
   create: () => ({ pos: -1, clock: false, reset: false }),
   process(s, i, o, p) {

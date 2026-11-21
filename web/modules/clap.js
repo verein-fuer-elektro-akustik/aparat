@@ -9,6 +9,7 @@ export default {
   cols: 2,
   inputs: { trig: 0 },
   outputs: ['out'],
+  kinds: { in: { trig: 'gate' } },
   params: {
     decay: { min: 0.03, max: 1.5, default: 0.18, curve: 'exp', format: (v) => `${(v * 1000).toFixed(0)} ms` },
     tone: { min: 400, max: 6000, default: 1200, curve: 'exp', format: (v) => `${Math.round(v)} hz` },

@@ -11,6 +11,7 @@ export default {
   cols: 2,
   inputs: { in: 0 },
   outputs: ['out', 'env', 'gate'],
+  kinds: { out: { gate: 'gate' } },
   lights: ['gate'],
   params: {
     gain: { min: 0, max: 8, default: 1 },

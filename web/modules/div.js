@@ -9,6 +9,7 @@ export default {
   cols: 3,
   inputs: { clock: 0, reset: 0 },
   outputs: ['/2', '/3', '/4', '/8', 'x2', 'x4'],
+  kinds: { in: { clock: 'gate', reset: 'gate' }, out: { '/2': 'gate', '/3': 'gate', '/4': 'gate', '/8': 'gate', x2: 'gate', x4: 'gate' } },
   lights: ['/2', '/3', '/4', '/8', 'x2', 'x4'],
   params: {},
   create: () => ({ n: -1, clock: false, reset: false, since: 0, period: 0, seen: false }),

@@ -13,6 +13,7 @@ export default {
   cols: 3,
   inputs: { in: 0, pos: 0, pitch: 0 },
   outputs: ['out'],
+  kinds: { in: { pitch: 'pitch' } },
   bypass: { out: 'in' },
   params: {
     density: { min: 1, max: 200, default: 20, curve: 'exp', format: (v) => `${v.toFixed(1)} hz` },

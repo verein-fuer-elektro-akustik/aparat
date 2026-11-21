@@ -11,6 +11,7 @@ export default {
   cols: 4,
   inputs: {},
   outputs: ['x', 'y', 'press', 'gate'],
+  kinds: { out: { gate: 'gate' } },
   lights: ['press', 'gate'],
   params: {
     x: { min: 0, max: 1, default: 0.5, format: unit },

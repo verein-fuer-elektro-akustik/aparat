@@ -9,6 +9,7 @@ export default {
   cols: 2,
   inputs: { rate: 0, reset: 0 },
   outputs: ['sin', 'tri', 'saw', 'squ'],
+  kinds: { in: { reset: 'gate' } },
   params: {
     rate: { min: 0.01, max: 100, default: 1, curve: 'exp', format: (v) => `${v.toFixed(2)} hz` },
     pw: { min: 0.05, max: 0.95, default: 0.5, format: (v) => `${Math.round(v * 100)}%` },

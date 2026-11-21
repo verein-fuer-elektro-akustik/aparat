@@ -52,6 +52,7 @@ export default {
   cols: 4,
   inputs: {},
   outputs: OUTPUTS,
+  kinds: { out: { a: 'gate', b: 'gate', x: 'gate', y: 'gate', lb: 'gate', rb: 'gate', up: 'gate', down: 'gate', left: 'gate', right: 'gate' } },
   lights: OUTPUTS,
   params: { pad: { min: 1, max: 4, default: 1, step: 1, format: (v) => `pad ${v}` } },
   displayHeight: 64,

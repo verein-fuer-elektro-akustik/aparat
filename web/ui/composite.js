@@ -39,12 +39,28 @@ export function panelDef(name, spec, defOf) {
   }
   const inputs = Object.fromEntries((spec.inputs ?? []).map((j) => [j.name, 0]));
   const outputs = (spec.outputs ?? []).map((j) => j.name);
+  // a jack has the kind of the jacks it leads to, when they all agree
+  const kindOf = (dir, id, jack) => {
+    const inner = byId.get(id);
+    return (inner && defOf(inner.type)?.kinds?.[dir]?.[jack]) ?? null;
+  };
+  const kinds = { in: {}, out: {} };
+  for (const j of spec.inputs ?? []) {
+    const found = new Set(j.to.map(([id, name]) => kindOf('in', id, name)));
+    const [kind] = found;
+    if (found.size === 1 && kind) kinds.in[j.name] = kind;
+  }
+  for (const j of spec.outputs ?? []) {
+    const kind = j.from && kindOf('out', j.from[0], j.from[1]);
+    if (kind) kinds.out[j.name] = kind;
+  }
   return {
     name,
     doc: spec.doc || `A composite of ${spec.modules.length} modules.`,
     cols: fit(Object.keys(params).length, Object.keys(inputs).length, outputs.length),
     inputs,
     outputs,
+    kinds,
     params,
     composite: spec,
   };

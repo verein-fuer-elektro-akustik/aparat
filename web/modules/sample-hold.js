@@ -4,6 +4,7 @@ export default {
   cols: 2,
   inputs: { in: 0, trig: 0 },
   outputs: ['out'],
+  kinds: { in: { trig: 'gate' } },
   params: {},
   create: () => ({ held: 0, high: false }),
   process(s, i, o) {

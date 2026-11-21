@@ -12,6 +12,7 @@ export default {
   cols: 2,
   inputs: { trig: 0, decay: 0 },
   outputs: ['out'],
+  kinds: { in: { trig: 'gate' } },
   params: {
     decay: { min: 0.01, max: 2, default: 0.06, curve: 'exp', format: (v) => `${(v * 1000).toFixed(0)} ms` },
     tone: { min: 2000, max: 16000, default: 8000, curve: 'exp', format: (v) => `${Math.round(v)} hz` },

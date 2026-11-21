@@ -13,6 +13,7 @@ export default {
   cols: 3,
   inputs: { run: 10, reset: 0 },
   outputs: ['bar', '4th', '8th', '16th', 'reset'],
+  kinds: { in: { run: 'gate', reset: 'gate' }, out: { bar: 'gate', '4th': 'gate', '8th': 'gate', '16th': 'gate', reset: 'gate' } },
   lights: ['bar', '4th', '8th', '16th', 'reset'],
   params: {
     bpm: { min: 30, max: 300, default: 120, format: (v) => `${v.toFixed(1)} bpm` },

@@ -9,6 +9,7 @@ export default {
   cols: 2,
   inputs: { in: 0, prob: 0 },
   outputs: ['a', 'b'],
+  kinds: { in: { in: 'gate' }, out: { a: 'gate', b: 'gate' } },
   lights: ['a', 'b'],
   params: {
     prob: { min: 0, max: 1, default: 0.5, format: (v) => `${Math.round(v * 100)}%` },

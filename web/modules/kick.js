@@ -13,6 +13,7 @@ export default {
   cols: 3,
   inputs: { trig: 0, pitch: 0, decay: 0 },
   outputs: ['out'],
+  kinds: { in: { trig: 'gate', pitch: 'pitch' } },
   params: {
     pitch: { min: 25, max: 150, default: 50, curve: 'exp', format: (v) => `${v.toFixed(1)} hz` },
     bend: { min: 0, max: 6, default: 3, format: (v) => `${v.toFixed(1)} oct` },

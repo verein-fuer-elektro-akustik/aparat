@@ -15,6 +15,9 @@ function rgb(c) {
   return m ? m.slice(0, 3).map(Number) : [128, 128, 128];
 }
 
+// what a jack's kind (def.kinds) means, shown on hover
+const KINDS = { gate: 'gate or trigger, 10 V', pitch: 'pitch, 1 V/oct' };
+
 export const keyName = (code) => code.replace(/^(Key|Digit|Numpad|Arrow)/, '').toLowerCase();
 
 const CELL = 48;
@@ -878,6 +881,11 @@ export class Rack {
       label.textContent = name;
       port.append(label);
       m.jacks[dir][i] = { el: jack, x: 0, y: 0 };
+      const kind = m.def.kinds?.[dir]?.[name];
+      if (kind) {
+        jack.classList.add(kind);
+        port.title = name === kind ? KINDS[kind] : `${name}: ${KINDS[kind]}`;
+      }
       jack.dataset.module = m.id;
       jack.dataset.dir = dir;
       jack.dataset.index = i;
@@ -1570,7 +1578,9 @@ export class Rack {
     this.toPaint.add(m);
   }
 
-  drawText(m, lines) {
+  // lines of text; with a meter ({peak, rms, hold, marks}, 0 to 1), a level
+  // bar below them
+  drawText(m, lines, meter) {
     const c = m.canvas;
     const dpr = (devicePixelRatio || 1) * this.zoom;
     const w = Math.round(c.clientWidth * dpr);
@@ -1584,7 +1594,36 @@ export class Rack {
     g.fillStyle = colours['f-high'];
     g.font = `${11 * dpr}px "JetBrains Mono", monospace`;
     g.textBaseline = 'middle';
-    lines.forEach((line, i) => g.fillText(line, 8 * dpr, ((i + 0.5) * h) / lines.length));
+    const textH = meter ? h - 30 * dpr : h;
+    lines.forEach((line, i) => g.fillText(line, 8 * dpr, ((i + 0.5) * textH) / lines.length));
+    if (meter) this.drawMeter(g, w, h, meter, dpr);
+  }
+
+  // a level bar at the bottom: rms filled, peak to its right a step lighter,
+  // the held peak as a tick, the scale's marks below
+  drawMeter(g, w, h, { peak, rms, hold, marks }, dpr) {
+    const x0 = 8 * dpr;
+    const bw = w - 16 * dpr;
+    const bh = 8 * dpr;
+    const y = h - 26 * dpr;
+    const line = Math.max(1, Math.round(dpr));
+    g.fillStyle = colours.edge;
+    g.fillRect(x0, y, bw, bh);
+    g.fillStyle = colours['f-med'];
+    g.fillRect(x0, y, Math.round(peak * bw), bh);
+    g.fillStyle = colours['f-high'];
+    g.fillRect(x0, y, Math.round(rms * bw), bh);
+    if (hold !== null) g.fillRect(x0 + Math.round(hold * bw) - line, y - 2 * dpr, 2 * line, bh + 4 * dpr);
+    g.fillStyle = colours['f-med'];
+    g.font = `${8 * dpr}px "JetBrains Mono", monospace`;
+    g.textAlign = 'center';
+    g.textBaseline = 'top';
+    for (const [at, label] of marks) {
+      const x = x0 + Math.round(at * bw);
+      g.fillRect(x, y + bh, line, 3 * dpr);
+      g.fillText(String(label), x, y + bh + 5 * dpr);
+    }
+    g.textAlign = 'start';
   }
 
   drawDisplay(id, data) {
@@ -1610,7 +1649,7 @@ export class Rack {
     if (!data) return;
     const c = m.canvas;
     if (m.def.displayText) {
-      this.drawText(m, m.def.displayText(data));
+      this.drawText(m, m.def.displayText(data), m.def.displayMeter?.(data));
       return;
     }
     // canvas pixels follow the zoom so the trace stays sharp
