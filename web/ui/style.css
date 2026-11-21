@@ -537,3 +537,27 @@ body.panning, body.panning * { cursor: grabbing !important; }
 }
 .jack:hover { border-color: var(--f-high); }
 .outputs .jack { background: var(--f-low); }
+
+/* the pad module's touch surface */
+.display.pad { cursor: crosshair; touch-action: none; }
+
+/* an output that lights up with its events (gates, triggers, controllers) */
+.outputs .jack[style*="--lit"] {
+  background: color-mix(in srgb, var(--f-high) calc(var(--lit) * 100%), var(--f-low));
+  box-shadow: 0 0 calc(var(--lit) * 6px) color-mix(in srgb, var(--f-high) calc(var(--lit) * 70%), transparent);
+}
+
+/* a button or switch linked to a computer key shows the key */
+.knob { position: relative; }
+.knob[data-key]::before {
+  content: attr(data-key);
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  padding: 0 2px;
+  border: 1px solid var(--f-low);
+  border-radius: 2px;
+  font: 8px/10px var(--mono);
+  color: var(--f-med);
+  text-transform: none;
+}

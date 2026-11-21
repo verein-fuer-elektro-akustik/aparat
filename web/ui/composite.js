@@ -221,8 +221,8 @@ export function makeComposite(patch, ids, name, exposed, defOf) {
     ...[...bySource.values()].map((e) => ({ from: e.from, to: [id, e.jack.name] })),
     ...[...byInner.values()].flatMap((e) => e.to.map((to) => ({ from: [id, e.jack.name], to }))),
   ];
-  // midi links of brought-out knobs move to the composite, others go
-  const midiMap = (patch.midiMap ?? []).flatMap((e) => {
+  // midi and key links of brought-out knobs move to the composite, others go
+  const relink = (list) => (list ?? []).flatMap((e) => {
     if (!inside.has(e.id)) return [e];
     const p = params.find((q) => q.module === e.id && q.param === e.param);
     return p ? [{ ...e, id, param: p.name }] : [];
@@ -233,7 +233,8 @@ export function makeComposite(patch, ids, name, exposed, defOf) {
     composites,
     modules: [...patch.modules.filter((m) => !inside.has(m.id)), { id, type: name, x: minX, row: minRow, params: values }],
     cables,
-    midiMap,
+    midiMap: relink(patch.midiMap),
+    keyMap: relink(patch.keyMap),
   };
 }
 
@@ -272,7 +273,7 @@ export function ungroup(patch, id, defOf) {
     }
   }
   for (const c of spec.cables) cables.push({ from: [newId.get(c.from[0]), c.from[1]], to: [newId.get(c.to[0]), c.to[1]] });
-  const midiMap = (patch.midiMap ?? []).flatMap((e) => {
+  const relink = (list) => (list ?? []).flatMap((e) => {
     if (e.id !== id) return [e];
     const p = spec.params.find((q) => q.name === e.param);
     return p ? [{ ...e, id: newId.get(p.module), param: p.param }] : [];
@@ -281,7 +282,8 @@ export function ungroup(patch, id, defOf) {
     ...patch,
     modules: [...patch.modules.filter((m) => m.id !== id), ...modules],
     cables,
-    midiMap,
+    midiMap: relink(patch.midiMap),
+    keyMap: relink(patch.keyMap),
     newIds: [...newId.values()],
   };
 }
@@ -398,7 +400,7 @@ export function insidePatch(spec, composites, defOf) {
   const cables = spec.cables.map((c) => ({ from: [...c.from], to: [...c.to] }));
   for (const j of spec.inputs ?? []) for (const to of j.to) cables.push({ from: [IN, j.name], to: [...to] });
   for (const j of spec.outputs ?? []) cables.push({ from: [...j.from], to: [OUT, j.name] });
-  return { v: 2, modules, cables, midiMap: [], composites };
+  return { v: 2, modules, cables, midiMap: [], keyMap: [], composites };
 }
 
 // The composite as the edit view now has it. `old` is the composite before:
@@ -548,5 +550,6 @@ export function renamePanel(patch, name, renames) {
     modules: top.modules,
     cables: top.cables,
     midiMap: (patch.midiMap ?? []).map((e) => (top.ids.has(e.id) ? { ...e, param: rp(e.param) } : e)),
+    keyMap: (patch.keyMap ?? []).map((e) => (top.ids.has(e.id) ? { ...e, param: rp(e.param) } : e)),
   };
 }

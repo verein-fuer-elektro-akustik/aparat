@@ -49,6 +49,8 @@ import sampler from './sampler.js';
 import hdar from './hdar.js';
 import follow from './follow.js';
 import button from './button.js';
+import pad from './pad.js';
+import gamepad from './gamepad.js';
 
 // A module is a plain object, imported by both the UI and the audio worklet,
 // so it must not touch the DOM:
@@ -65,6 +67,12 @@ import button from './button.js';
 //   process(s, in, out, p)  one sample; in, out and p are arrays in the
 //                        order of inputs, outputs and params
 //   onMidi(s, data, p)   optional, incoming midi bytes
+//   onGamepad(s, pads, p)  optional, the game controllers whenever one
+//                        changes: [null or {name, axes, buttons}] (values in
+//                        the browser's standard mapping)
+//   pad                  optional, [x, y, pressure]: names of params set by
+//                        a touch surface drawn in the display instead of
+//                        knobs; shape() returns {pad: [x, y, pressure]}
 //   display(s)           optional, data drawn on the panel at frame rate: an
 //                        array drawn as a trace (±12), or an object with
 //                        trace or bars (0 to 1, from the bottom) and an
@@ -88,6 +96,9 @@ import button from './button.js';
 //   file                 optional, the panel can load an audio file, which
 //                        arrives as onData(s, {samples, sr}) (null: none)
 //   text                 optional, the panel is a text field kept in the patch
+//   lights               optional, [output names] whose jacks light up with
+//                        their level (fully at 5 V): gates, triggers and
+//                        controllers, so their events show
 //   destroy(s)           optional, called when the module is removed
 //   bypass               optional {output: input}, see below
 //
@@ -104,6 +115,7 @@ export const groups = [
   ['effects', [delay, reverb, chorus, phaser, granular]],
   ['utilities', [atten, logic, compare, scope, meter, note]],
   ['sound card', [input, follow, output]],
+  ['controllers', [pad, gamepad]],
   ['midi', [midiIn, midiCcIn, midiClockIn, midiOut, midiCcOut, midiClockOut]],
 ];
 

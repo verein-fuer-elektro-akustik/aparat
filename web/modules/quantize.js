@@ -37,6 +37,7 @@ export default {
   cols: 2,
   inputs: { in: 0 },
   outputs: ['out', 'trig'],
+  lights: ['trig'],
   params: {
     scale: { min: 0, max: SCALES.length - 1, default: 2, step: 1, format: (v) => SCALES[v][0] },
     root: { min: 0, max: 11, default: 0, step: 1, format: (v) => NOTES[v] },

@@ -2,10 +2,11 @@ import { defs } from '../modules/index.js';
 import { AudioEngine, listOutputs } from './audio.js';
 import { CableLayer } from './cables.js';
 import { newPatch } from './new-patch.js';
+import { watchGamepads } from './gamepads.js';
 import { menubar } from './menubar.js';
 import { Midi } from './midi.js';
 import { patches } from './patches.js';
-import { Rack, ZOOM_MAX, ZOOM_MIN } from './rack.js';
+import { Rack, ZOOM_MAX, ZOOM_MIN, keyName } from './rack.js';
 import { makeKeys } from './keys.js';
 import { makeRecorder } from './recorder.js';
 import { samples } from './samples.js';
@@ -703,6 +704,7 @@ const canon = (patch) => JSON.stringify({
   modules: [...patch.modules].sort((a, b) => a.id - b.id),
   cables: patch.cables.map((c) => JSON.stringify(c)).sort(),
   midiMap: patch.midiMap,
+  keyMap: patch.keyMap ?? [],
   composites: patch.composites ?? {},
 });
 let saved = null;
@@ -866,6 +868,17 @@ function onEngineMessage(m) {
 
 function onFrame(m) {
   cables.setPeaks(m.peaks);
+  top.stepLights(m.lights);
+  // the edit view lights the jacks of the composite's first instance
+  if (editing) {
+    const shown = [];
+    for (const l of m.lights) {
+      const rest = typeof l.id === 'string' && l.id.startsWith(`${shownPrefix}/`) ? l.id.slice(shownPrefix.length + 1) : '';
+      // a composite inside it reads its own ids, 'n/m'
+      if (rest) shown.push({ id: /^\d+$/.test(rest) ? Number(rest) : rest, v: l.v });
+    }
+    inner.stepLights(shown);
+  }
   for (const d of m.displays) {
     top.drawDisplay(d.id, d.data);
     // the edit view shows the displays of the composite's first instance
@@ -901,6 +914,13 @@ function onMidiMessage(data) {
   if ((data[0] & 0xf0) === 0xb0 && data[0] < 0xf0) top.handleCc((data[0] & 15) + 1, data[1], data[2]);
 }
 
+// game controllers, sent while the engine runs (true: it was sent)
+const gamepads = watchGamepads((m) => {
+  if (!audio.running) return false;
+  audio.send(m);
+  return true;
+});
+
 // toolbar
 
 async function startAudio() {
@@ -912,6 +932,7 @@ async function startAudio() {
     throw err;
   }
   top.replay();
+  gamepads.resend();
   buildClipLamps();
   showAudioInfo();
   // outputLatency is often only known once sound is flowing
@@ -1363,6 +1384,11 @@ window.addEventListener('keydown', (e) => {
   if (e.key === ' ' && !e.target.closest('button, [role="switch"]')) e.preventDefault();
   // edits during a drag would fight with the layout the drag works on
   if (rack.dragging && e.key !== 'Escape') return;
+  if (e.key === 'Escape' && rack.cancelLearn()) return;
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && playKey(e)) {
+    e.preventDefault();
+    return;
+  }
   if (e.key === 'Escape' && editing && !rack.selection.size && !rack.selectedCable) {
     leaveTo(editing.length - 1);
     return;
@@ -1425,6 +1451,30 @@ window.addEventListener('keydown', (e) => {
   }
   if ((e.key === 'Delete' || e.key === 'Backspace') && menu.hidden) removeSelection();
 });
+
+// Key learn and linked keys (see rack.keyDown). Keys with a job of their own
+// can't be learned; the rest, also the playing keyboard's, can, and a linked
+// key then plays its button instead of a note. Links live in the patch, so
+// they are learned outside the edit view.
+const TAKEN = new Set(['Escape', 'Delete', 'Backspace', 'Tab', 'Equal', 'Minus', 'Digit0', 'Slash', 'NumpadAdd', 'NumpadSubtract']);
+
+function playKey(e) {
+  if (rack !== top && rack.learning) return false;
+  if (top.learning && TAKEN.has(e.code)) {
+    showInfo(`${keyName(e.code)} has a job of its own, pick another key`);
+    return true;
+  }
+  const done = top.keyDown(e);
+  if (done === 'knob') {
+    top.cancelLearn();
+    showInfo('keys work on buttons and switches; knobs learn midi controllers');
+    return true;
+  }
+  return !!done;
+}
+
+window.addEventListener('keyup', (e) => top.keyUp(e.code));
+window.addEventListener('blur', () => top.releaseKeys());
 
 // touch: a long press is a right-click (browsers without a context menu on
 // touch, like Safari on iOS, never send one)

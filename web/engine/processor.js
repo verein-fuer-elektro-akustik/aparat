@@ -43,6 +43,9 @@ class Aparat extends AudioWorkletProcessor {
     this.mods = [];
     this.byId = new Map();
     this.midiMods = [];
+    this.gamepadMods = [];
+    this.lightMods = []; // modules whose outputs light up (def.lights)
+    this.gamepads = null; // the last state of the controllers, for new modules
     this.displayMods = [];
 
     this.from = new Int32Array(MAX_CABLES);
@@ -118,6 +121,10 @@ class Aparat extends AudioWorkletProcessor {
       case 'midi':
         for (const mod of this.midiMods) mod.def.onMidi(mod.state, m.bytes, mod.param);
         break;
+      case 'gamepad':
+        this.gamepads = m.pads;
+        for (const mod of this.gamepadMods) mod.def.onGamepad(mod.state, m.pads, mod.param);
+        break;
       case 'clear':
         for (const id of [...this.byId.keys()]) this.remove(id);
         for (let k = this.nActive - 1; k >= 0; k--) this.disconnect(this.active[k]);
@@ -169,7 +176,17 @@ class Aparat extends AudioWorkletProcessor {
     this.mods.push(mod);
     this.byId.set(id, mod);
     if (def.onMidi) this.midiMods.push(mod);
+    if (def.onGamepad) {
+      this.gamepadMods.push(mod);
+      def.onGamepad(mod.state, this.gamepads, mod.param);
+    }
     if (def.display) this.displayMods.push(mod);
+    if (def.lights) {
+      mod.lights = Int32Array.from(def.lights, (name) => def.outputs.indexOf(name));
+      mod.lightPeak = new Float32Array(def.lights.length);
+      mod.lightSent = false;
+      this.lightMods.push(mod);
+    }
   }
 
   remove(id) {
@@ -178,7 +195,9 @@ class Aparat extends AudioWorkletProcessor {
     this.byId.delete(id);
     this.mods.splice(this.mods.indexOf(mod), 1);
     this.midiMods = this.midiMods.filter((m) => m !== mod);
+    this.gamepadMods = this.gamepadMods.filter((m) => m !== mod);
     this.displayMods = this.displayMods.filter((m) => m !== mod);
+    this.lightMods = this.lightMods.filter((m) => m !== mod);
     this.smooth = this.smooth.filter((e) => e.arr !== mod.param);
     mod.def.destroy?.(mod.state);
     release(this.inPool, mod.inAt, mod.nIn);
@@ -247,8 +266,17 @@ class Aparat extends AudioWorkletProcessor {
       // real port see a copy too
       if (data) displays.push({ id: m.id, data: ArrayBuffer.isView(data) ? data.slice() : data });
     }
+    // the loudest each light was in this frame; silent ones only once
+    const lights = [];
+    for (const m of this.lightMods) {
+      const any = m.lightPeak.some((v) => v > 0);
+      if (any || m.lightSent) lights.push({ id: m.id, v: m.lightPeak.slice() });
+      m.lightSent = any;
+      m.lightPeak.fill(0);
+    }
     this.port.postMessage({
       type: 'frame',
+      lights,
       peaks: this.peaks.slice(0, this.peakLen),
       clip: this.clip.slice(0, MAX_CHANNELS),
       displays,
@@ -310,6 +338,17 @@ class Aparat extends AudioWorkletProcessor {
         m.process(m.state, mi, mo, m.param);
         const w = b.mix;
         for (let k = 0; k < src.length; k++) mo[k] = mo[k] * (1 - w) + (src[k] < 0 ? 0 : mi[src[k]] * w);
+      }
+
+      for (let i = 0; i < this.lightMods.length; i++) {
+        const m = this.lightMods[i];
+        const idx = m.lights;
+        const pk = m.lightPeak;
+        for (let k = 0; k < idx.length; k++) {
+          let a = m.out[idx[k]];
+          if (a < 0) a = -a;
+          if (a > pk[k]) pk[k] = a;
+        }
       }
 
       // A patched input is the sum of its cables; the default only applies

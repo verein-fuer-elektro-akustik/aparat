@@ -4,6 +4,7 @@ export default {
   cols: 3,
   inputs: { clock: 0, start: 0, stop: 0 },
   outputs: ['clock', 'start', 'stop'],
+  lights: ['clock', 'start', 'stop'],
   params: {},
   create: (sr, host) => ({ host, clock: false, start: false, stop: false }),
   process(s, i, o) {

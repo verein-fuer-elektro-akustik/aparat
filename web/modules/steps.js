@@ -16,6 +16,7 @@ export default {
   cols: 4,
   inputs: { clock: 0, reset: 0 },
   outputs: ['gate', 'end'],
+  lights: ['gate', 'end'],
   params,
   // display() returns the index of the knob to mark as current, -1 for none
   displayKnob: true,

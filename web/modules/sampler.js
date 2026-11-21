@@ -13,6 +13,7 @@ export default {
   cols: 3,
   inputs: { trig: 0, pitch: 0 },
   outputs: ['out', 'end'],
+  lights: ['end'],
   params: {
     tune: { min: -2, max: 2, default: 0, format: (v) => `${(v * 12).toFixed(1)} st` },
     start: { min: 0, max: 1, default: 0 },

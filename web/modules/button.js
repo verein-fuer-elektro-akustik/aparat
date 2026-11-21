@@ -8,6 +8,7 @@ export default {
   cols: 2,
   inputs: {},
   outputs: ['gate', 'trig'],
+  lights: ['gate', 'trig'],
   params: { push: { min: 0, max: 1, default: 0, step: 1, momentary: true, format: (v) => (v ? 'on' : 'off') } },
   create: (sr) => ({ pulse: Math.round(sr * 0.005), left: 0, high: false }),
   process(s, i, o, p) {

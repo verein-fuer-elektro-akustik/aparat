@@ -25,6 +25,7 @@ export default {
   cols: 4,
   inputs: { clock: 0, reset: 0, h1: 0, h2: 0, h3: 0, h4: 0 },
   outputs: ['1', '2', '3', '4'],
+  lights: ['1', '2', '3', '4'],
   params: {
     len1: len, len2: len, len3: len, len4: len,
     hits1: hits, hits2: hits, hits3: hits, hits4: hits,

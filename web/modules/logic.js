@@ -6,6 +6,7 @@ export default {
   cols: 2,
   inputs: { a: 0, b: 0 },
   outputs: ['and', 'or', 'xor', 'not a'],
+  lights: ['and', 'or', 'xor', 'not a'],
   params: {},
   create: () => ({}),
   process(s, i, o) {

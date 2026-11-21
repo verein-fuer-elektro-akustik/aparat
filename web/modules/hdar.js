@@ -22,6 +22,7 @@ export default {
   cols: 2,
   inputs: { trig: 0 },
   outputs: ['out', 'inv', 'dtrig'],
+  lights: ['dtrig'],
   params: { delay: time(0.3), attack: time(0.5), hold: time(0.2), release: time(0.5) },
   create: (sr) => ({ sr, stage: IDLE, t: 0, v: 0, high: false, live: new Float32Array(3), was: -1 }),
   process(s, i, o, p) {

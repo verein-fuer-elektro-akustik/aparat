@@ -10,6 +10,7 @@ export default {
   cols: 4,
   inputs: { clock: 0, reset: 0 },
   outputs: ['pitch', 'gate'],
+  lights: ['gate'],
   params: {
     s1: step, s2: step, s3: step, s4: step,
     s5: step, s6: step, s7: step, s8: step,

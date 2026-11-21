@@ -11,6 +11,7 @@ export default {
   cols: 2,
   inputs: { in: 0 },
   outputs: ['out', 'env', 'gate'],
+  lights: ['gate'],
   params: {
     gain: { min: 0, max: 8, default: 1 },
     release: { min: 0.01, max: 2, default: 0.15, curve: 'exp', format: (v) => `${(v * 1000).toFixed(0)} ms` },

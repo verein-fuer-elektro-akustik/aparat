@@ -7,6 +7,7 @@ export default {
   cols: 2,
   inputs: { in: 0, ref: 0 },
   outputs: ['above', 'below'],
+  lights: ['above', 'below'],
   params: { level: { min: -10, max: 10, default: 0, format: (v) => `${v.toFixed(2)} v` } },
   create: () => ({}),
   process(s, i, o, p) {

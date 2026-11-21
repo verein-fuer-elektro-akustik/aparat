@@ -58,6 +58,7 @@ export default {
   cols: 3,
   inputs: {},
   outputs: ['pitch', 'gate', 'vel', 'mod', 'bend'],
+  lights: ['gate'],
   params: { channel: CHANNEL, voice: VOICE, of: VOICE },
   create: () => ({ held: [], pitch: 0, gate: 0, vel: 0, mod: 0, bend: 0, retrig: false }),
   onMidi(s, d, p) {

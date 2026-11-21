@@ -54,7 +54,8 @@ function engine(patch = { modules: [], cables: [] }) {
     assert.deepEqual(errors(), []);
     return Object.assign(all[0], { all });
   };
-  return { send, render, midi: (...bytes) => send({ op: 'midi', bytes }) };
+  // outputs: a module's output voltages now
+  return { send, render, midi: (...bytes) => send({ op: 'midi', bytes }), outputs: (id) => [...p.byId.get(id).out], posted: () => p.posted };
 }
 
 const peak = (a) => a.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
@@ -353,6 +354,68 @@ test('button, hdar: a short press gives a delayed, held envelope', () => {
   assert.equal(h.for(0.6, 10)[0], 10);
 });
 
+test('pad: x and y as voltages, gate while pressed, glide', () => {
+  const pad = run(registry.pad, { x: 0.25, y: 1 });
+  assert.deepEqual(pad.for(0.01), [2.5, 10, 0, 0]);
+  pad.p[2] = 0.5; // pressed
+  const [, , press, gate] = pad.for(0.02);
+  assert.ok(Math.abs(press - 5) < 1e-3 && gate === 10, `${press} ${gate}`);
+  pad.p[2] = 0;
+  assert.equal(pad.for(1 / SR)[3], 0); // the gate closes at once
+  pad.p[4] = 1; // bipolar
+  assert.deepEqual(pad.for(0.01).slice(0, 2), [-2.5, 5]);
+  pad.p[3] = 0.5; // glide: halfway after about 0.35 s
+  pad.p[0] = 1;
+  const x = pad.for(0.1)[0];
+  assert.ok(x > -2.5 && x < 2.5, `gliding ${x}`);
+});
+
+test('gamepad: sticks, triggers and buttons of the chosen controller', () => {
+  const e = engine({ modules: [{ id: 1, type: 'gamepad' }], cables: [] });
+  const buttons = Array(17).fill(0);
+  const out = registry.gamepad.outputs;
+  const level = () => {
+    e.render(0.1);
+    const o = e.outputs(1);
+    return [o[out.indexOf('ly')], o[out.indexOf('a')]];
+  };
+  assert.deepEqual(level(), [0, 0]); // no controller yet
+  e.send({ op: 'gamepad', pads: [null, { name: 'test', axes: [0, -1, 0, 0], buttons: [1, ...buttons.slice(1)] }, null, null] });
+  assert.deepEqual(level(), [0, 0]); // it is pad 2, the module listens to pad 1
+  e.send({ op: 'param', id: 1, i: 0, v: 2 });
+  const [up, a] = level();
+  // stick up is +5 V, a button 10 V
+  assert.ok(Math.abs(up - 5) < 0.01 && a === 10, `${up} ${a}`);
+  // a module added later hears the last state at once
+  const g = registry.gamepad;
+  const s = g.create(SR, {});
+  g.onGamepad(s, [{ name: 'x', axes: [0.05, 0, 1, 0], buttons: [0, 0, 0, 0, 0, 0, 0.5, 1] }], [1]);
+  const o = new Float64Array(g.outputs.length);
+  for (let n = 0; n < SR * 0.05; n++) g.process(s, [], o, [1]);
+  assert.equal(o[0], 0); // inside the dead zone
+  assert.ok(Math.abs(o[2] - 5) < 0.01 && Math.abs(o[4] - 5) < 0.01 && Math.abs(o[5] - 10) < 0.01, [...o].join(' '));
+});
+
+test('lit outputs report their loudest in each frame', () => {
+  const e = engine({ modules: [{ id: 1, type: 'button' }, { id: 2, type: 'vco' }], cables: [] });
+  e.render(0.05);
+  const frames = () => e.posted().filter((m) => m.type === 'frame');
+  // a module without lights is never reported; a silent one is not either
+  assert.ok(frames().every((f) => f.lights.length === 0));
+  e.send({ op: 'param', id: 1, i: 0, v: 1 });
+  e.render(0.05);
+  const lit = frames().at(-1).lights;
+  assert.deepEqual(lit.map((l) => [l.id, ...l.v]), [[1, 10, 0]]); // gate held, the trigger is over
+  const pulse = frames().find((f) => f.lights[0]?.v[1] === 10);
+  assert.ok(pulse, 'the short trigger shows in its frame');
+  e.send({ op: 'param', id: 1, i: 0, v: 0 });
+  e.render(0.1);
+  // once more as silent, then not at all
+  const after = frames().slice(-4).map((f) => f.lights.map((l) => [...l.v]));
+  assert.deepEqual(after.slice(-2), [[], []]);
+  assert.ok(after.some((l) => l.length && l[0][0] === 0), 'one silent report');
+});
+
 test('follow turns loudness into a cv and a gate', () => {
   const f = run(registry.follow, { thresh: 3 });
   const tone = (seconds, amp) => {
@@ -425,6 +488,20 @@ test('ungroup gives back the same modules and cables', () => {
     };
   };
   assert.deepEqual(sig(back), sig(newPatch));
+});
+
+test('key links follow knobs into a composite and back out', () => {
+  const vcf = newPatch.modules.find((m) => m.type === 'vcf').id;
+  const vco = newPatch.modules.find((m) => m.type === 'vco').id;
+  const start = { ...newPatch, keyMap: [{ id: vcf, param: 'bypass', key: 'KeyQ' }, { id: vco, param: 'tune', key: 'KeyR' }] };
+  const ids = newPatch.modules.filter((m) => ['vco', 'vcf', 'env', 'vca'].includes(m.type)).map((m) => m.id);
+  const patch = makeComposite(start, ids, 'voice', [{ id: vcf, param: 'bypass' }], defFinder(registry, {}));
+  const voice = patch.modules.find((m) => m.type === 'voice');
+  // the brought-out switch keeps its key, the hidden knob loses its link
+  assert.deepEqual(patch.keyMap, [{ id: voice.id, param: 'bypass', key: 'KeyQ' }]);
+  const back = ungroup(patch, voice.id, defFinder(registry, patch.composites));
+  const bypass = back.modules.find((m) => m.type === 'vcf').id;
+  assert.deepEqual(back.keyMap, [{ id: bypass, param: 'bypass', key: 'KeyQ' }]);
 });
 
 test('a composite inside a composite', () => {

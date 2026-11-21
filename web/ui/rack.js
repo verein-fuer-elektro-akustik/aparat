@@ -6,6 +6,9 @@ import { defFinder, dependents, flatten, usedComposites } from './composite.js';
 // The rack is a grid of square cells. A module is CELLS cells tall, so the
 // rack is made of rows CELLS cells high. A module is as many cells wide as it
 // has columns of knobs and jacks (def.cols). Keep in sync with --cell in style.css.
+// a key's name as printed on it, from its code (KeyQ, Digit1, Space)
+export const keyName = (code) => code.replace(/^(Key|Digit|Numpad|Arrow)/, '').toLowerCase();
+
 const CELL = 48;
 const CELLS = 8;
 const ROW = CELL * CELLS;
@@ -73,6 +76,8 @@ export class Rack {
     this.learning = null;
     this.dragging = false; // a module or cable is being dragged
     this.midiMap = [];
+    this.keyMap = []; // {id, param, key}: computer keys on buttons and switches
+    this.held = new Map(); // key code -> the knobs it holds down
     this.rows = 1;
     this.drop = div('drop', content);
     this.drop.hidden = true;
@@ -184,6 +189,7 @@ export class Rack {
       if (c.from.m === m || c.to.m === m) this.disconnect(c);
     }
     this.midiMap = this.midiMap.filter((e) => e.id !== m.id);
+    this.keyMap = this.keyMap.filter((e) => e.id !== m.id);
     if (this.learning?.m === m) this.learning = null;
     this.selection.delete(m);
     this.sendRemove(m);
@@ -225,6 +231,7 @@ export class Rack {
     this.setComposites({});
     this.nextId = 1;
     this.midiMap = [];
+    this.keyMap = [];
   }
 
   // Add a module at a grid cell, pushing the row's modules aside.
@@ -246,7 +253,8 @@ export class Rack {
   randomize(m) {
     if (!this.live(m)) return;
     m.knobs.forEach((k, i) => {
-      if (m.keys[i] !== 'bypass') k.setNorm(Math.random());
+      const d = m.def.params[m.keys[i]];
+      if (m.keys[i] !== 'bypass' && !d.momentary) k.setNorm(Math.random());
     });
   }
 
@@ -471,6 +479,7 @@ export class Rack {
         to: [c.to.m.id, Object.keys(c.to.m.def.inputs)[c.to.i]],
       })),
       midiMap: this.midiMap,
+      keyMap: this.keyMap,
       composites: usedComposites([...this.modules.values()], this.composites),
     };
   }
@@ -500,6 +509,7 @@ export class Rack {
     }
     this.midiMap = (patch.midiMap ?? []).filter((e) => this.modules.has(e.id));
     for (const e of this.midiMap) this.knobFor(e)?.el.classList.add('mapped');
+    this.setKeyMap(patch.keyMap);
     this.select(null);
   }
 
@@ -566,6 +576,7 @@ export class Rack {
     for (const e of this.midiMap) this.knobFor(e)?.el.classList.remove('mapped');
     this.midiMap = (patch.midiMap ?? []).filter((e) => this.modules.has(e.id));
     for (const e of this.midiMap) this.knobFor(e)?.el.classList.add('mapped');
+    this.setKeyMap(patch.keyMap);
     this.relayoutCables();
     this.updateExtent();
     this.onChange();
@@ -579,17 +590,105 @@ export class Rack {
     return i >= 0 ? m.knobs[i] : null;
   }
 
+  // Right-click arms a knob: the next midi controller, or for buttons and
+  // switches the next key, is linked to it. Right-click again removes its
+  // links.
   armLearn(m, i) {
     const same = this.learning?.m === m && this.learning.i === i;
-    if (this.learning) this.learning.m.knobs[this.learning.i].el.classList.remove('learn');
-    this.learning = same ? null : { m, i };
-    if (this.learning) m.knobs[i].el.classList.add('learn');
-    const entry = { id: m.id, param: m.keys[i] };
+    this.cancelLearn();
     if (same) {
-      this.midiMap = this.midiMap.filter((e) => e.id !== entry.id || e.param !== entry.param);
+      const other = (e) => e.id !== m.id || e.param !== m.keys[i];
+      this.midiMap = this.midiMap.filter(other);
+      this.keyMap = this.keyMap.filter(other);
       m.knobs[i].el.classList.remove('mapped');
+      this.showKey(m, i);
       this.onChange();
+      return;
     }
+    this.learning = { m, i };
+    m.knobs[i].el.classList.add('learn');
+  }
+
+  cancelLearn() {
+    if (!this.learning) return false;
+    const { m, i } = this.learning;
+    m.knobs[i]?.el.classList.remove('learn');
+    this.learning = null;
+    return true;
+  }
+
+  // key learn: buttons are held while their key is, switches flip
+
+  canTakeKey(m, i) {
+    const d = m.def.params[m.keys[i]];
+    return !!d && (!!d.momentary || (d.min === 0 && d.max === 1 && d.step === 1));
+  }
+
+  setKeyMap(list) {
+    const before = this.keyMap;
+    this.keyMap = (list ?? []).filter((e) => this.modules.has(e.id));
+    for (const e of [...before, ...this.keyMap]) {
+      const m = this.modules.get(e.id);
+      if (m) this.showKey(m, m.keys.indexOf(e.param));
+    }
+  }
+
+  // the key's name on the knob
+  showKey(m, i) {
+    const el = m.knobs[i]?.el;
+    if (!el) return;
+    const e = this.keyMap.find((k) => k.id === m.id && k.param === m.keys[i]);
+    if (e) el.dataset.key = keyName(e.key);
+    else delete el.dataset.key;
+  }
+
+  // A key went down: learns it or plays what it is linked to. Returns
+  // 'learned', 'knob' (a knob is armed, which takes no keys), 'played' or
+  // null (not used).
+  keyDown(e) {
+    if (this.learning) {
+      const { m, i } = this.learning;
+      if (!this.canTakeKey(m, i)) return 'knob';
+      this.cancelLearn();
+      this.keyMap = this.keyMap.filter((k) => k.id !== m.id || k.param !== m.keys[i]);
+      this.keyMap.push({ id: m.id, param: m.keys[i], key: e.code });
+      this.showKey(m, i);
+      this.onChange();
+      return 'learned';
+    }
+    const links = this.keyMap.filter((k) => k.key === e.code);
+    if (!links.length) return null;
+    if (e.repeat || this.held.has(e.code)) return 'played';
+    const holding = [];
+    for (const link of links) {
+      const m = this.modules.get(link.id);
+      const i = m ? m.keys.indexOf(link.param) : -1;
+      if (i < 0) continue;
+      const knob = m.knobs[i];
+      if (m.def.params[link.param].momentary) {
+        knob.setNorm(1);
+        holding.push(knob);
+      } else {
+        knob.setNorm(m.values[i] === 1 ? 0 : 1);
+      }
+    }
+    this.held.set(e.code, holding);
+    return 'played';
+  }
+
+  keyUp(code) {
+    const holding = this.held.get(code);
+    if (!holding) return false;
+    this.held.delete(code);
+    for (const knob of holding) {
+      knob.setNorm(0);
+    }
+    return true;
+  }
+
+  // the window lost the keyboard: nothing stays held down
+  releaseKeys() {
+    for (const code of [...this.held.keys()]) this.keyUp(code);
   }
 
   handleCc(channel, cc, value) {
@@ -711,10 +810,13 @@ export class Rack {
           },
           onLearn: () => this.armLearn(m, i),
         });
-        knobs.append(knob.el);
+        // the pad's own parameters are set from its surface, not shown
+        if (!def.pad?.includes(key)) knobs.append(knob.el);
         m.knobs.push(knob);
       });
+      if (!knobs.children.length) knobs.remove();
     }
+    if (def.pad) this.buildPad(m);
 
     const inputs = Object.keys(def.inputs);
     const inBox = div('ports inputs', el);
@@ -724,6 +826,39 @@ export class Rack {
     if (!inputs.length) inBox.remove();
     if (!def.outputs.length) outBox.remove();
     if (!inputs.length && def.outputs.length) outBox.style.marginTop = 'auto';
+  }
+
+  // A touch surface on the display sets the pad's x, y and pressure through
+  // their (hidden) knobs, so the patch, undo and composites see them as
+  // knob turns. A mouse presses fully; pens and fingers report pressure.
+  buildPad(m) {
+    const c = m.canvas;
+    c.classList.add('pad');
+    const [kx, ky, kp] = m.def.pad.map((k) => m.knobs[m.keys.indexOf(k)]);
+    const set = (e) => {
+      const r = c.getBoundingClientRect();
+      const inset = 4 * (r.height / c.clientHeight || 1);
+      kx.setNorm((e.clientX - r.left - inset) / (r.width - 2 * inset));
+      ky.setNorm(1 - (e.clientY - r.top - inset) / (r.height - 2 * inset));
+      const pressure = e.pointerType === 'mouse' || !e.pressure ? 1 : e.pressure;
+      kp.setNorm(Math.max(0.001, pressure));
+    };
+    c.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      c.setPointerCapture(e.pointerId);
+      set(e);
+      const move = (ev) => set(ev);
+      const up = () => {
+        kp.setNorm(0);
+        c.removeEventListener('pointermove', move);
+        c.removeEventListener('pointerup', up);
+        c.removeEventListener('pointercancel', up);
+      };
+      c.addEventListener('pointermove', move);
+      c.addEventListener('pointerup', up);
+      c.addEventListener('pointercancel', up);
+    });
   }
 
   buildJacks(m, box, dir, names) {
@@ -1223,6 +1358,26 @@ export class Rack {
     }
   }
 
+  // a touch surface: a crosshair through the point, which grows when pressed
+  drawPad(g, w, h, [x, y, press], dpr) {
+    const line = Math.max(1, Math.round(dpr));
+    const inset = 4 * dpr;
+    const px = inset + x * (w - 2 * inset);
+    const py = h - inset - y * (h - 2 * inset);
+    g.fillStyle = colours.edge;
+    for (const k of [0.25, 0.5, 0.75]) {
+      g.fillRect(Math.round(k * w), 0, line, h);
+      g.fillRect(0, Math.round(k * h), w, line);
+    }
+    g.fillStyle = colours['f-med'];
+    g.fillRect(Math.round(px), 0, line, h);
+    g.fillRect(0, Math.round(py), w, line);
+    g.fillStyle = colours['f-high'];
+    g.beginPath();
+    g.arc(px, py, (3 + 5 * press) * dpr, 0, 2 * Math.PI);
+    g.fill();
+  }
+
   // a waveform from min/max pairs, brighter between from and to, with a
   // playhead
   drawWave(g, w, h, { wave, from, to, head }, dpr) {
@@ -1295,6 +1450,53 @@ export class Rack {
       m.live = null;
       if (m.def.shape) this.paint(m);
     }
+    for (const m of this.modules.values()) {
+      if (!m.lightLevel) continue;
+      m.lightLevel.fill(0);
+      for (const j of m.jacks.out) j?.el.style.removeProperty('--lit');
+    }
+  }
+
+  // Once per frame, with how loud the lit outputs were ([{id, v}], see
+  // def.lights; null when audio stops): each light follows its output,
+  // fully lit at 5 V, and fades out over a few frames, so a short trigger
+  // still shows. A composite lights the outputs that come from lit ones.
+  stepLights(list) {
+    const got = new Map(list?.map((l) => [l.id, l.v]));
+    for (const m of this.modules.values()) {
+      const sources = this.lightSources(m);
+      if (!sources.length) continue;
+      m.lightLevel ??= new Float32Array(m.def.outputs.length);
+      for (const { out, id, k } of sources) {
+        const target = Math.min(1, (got.get(id)?.[k] ?? 0) / 5);
+        let l = Math.max(target, m.lightLevel[out] * 0.6);
+        if (l < 0.03) l = 0;
+        if (l === m.lightLevel[out]) continue;
+        m.lightLevel[out] = l;
+        const el = m.jacks.out[out]?.el;
+        if (l) el?.style.setProperty('--lit', l.toFixed(2));
+        else el?.style.removeProperty('--lit');
+      }
+    }
+  }
+
+  // which engine module and light each lit output of m reads: {out, id, k}
+  lightSources(m) {
+    if (m.lightSources && m.lightFlat === m.flat) return m.lightSources;
+    const list = [];
+    if (m.flat) {
+      m.flat.outputs.forEach((src, out) => {
+        const x = src && m.flat.modules.find((y) => y.id === src[0]);
+        const d = x && registry[x.type];
+        const k = d?.lights ? d.lights.indexOf(d.outputs[src[1]]) : -1;
+        if (k >= 0) list.push({ out, id: src[0], k });
+      });
+    } else if (m.def.lights) {
+      m.def.lights.forEach((name, k) => list.push({ out: m.def.outputs.indexOf(name), id: m.id, k }));
+    }
+    m.lightFlat = m.flat;
+    m.lightSources = list;
+    return list;
   }
 
   // one paint per module and frame, however many changes come in
@@ -1369,6 +1571,10 @@ export class Rack {
     }
     if (data.curve) {
       this.drawCurve(g, w, h, data, dpr);
+      return;
+    }
+    if (data.pad) {
+      this.drawPad(g, w, h, data.pad, dpr);
       return;
     }
     if ('wave' in data) {

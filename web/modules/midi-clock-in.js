@@ -6,6 +6,7 @@ export default {
   cols: 3,
   inputs: {},
   outputs: ['clock', 'start', 'stop'],
+  lights: ['clock', 'start', 'stop'],
   params: {},
   create: (sr) => ({ width: Math.round(sr * PULSE_SECONDS), clock: 0, start: 0, stop: 0 }),
   onMidi(s, d) {
