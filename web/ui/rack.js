@@ -7,6 +7,14 @@ import { defFinder, dependents, flatten, usedComposites } from './composite.js';
 // rack is made of rows CELLS cells high. A module is as many cells wide as it
 // has columns of knobs and jacks (def.cols). Keep in sync with --cell in style.css.
 // a key's name as printed on it, from its code (KeyQ, Digit1, Space)
+// a colour from the theme (#rrggbb or rgb()) as [r, g, b]
+function rgb(c) {
+  const hex = /^#([0-9a-f]{6})$/i.exec(c ?? '');
+  if (hex) return [0, 2, 4].map((k) => parseInt(hex[1].slice(k, k + 2), 16));
+  const m = (c ?? '').match(/[\d.]+/g);
+  return m ? m.slice(0, 3).map(Number) : [128, 128, 128];
+}
+
 export const keyName = (code) => code.replace(/^(Key|Digit|Numpad|Arrow)/, '').toLowerCase();
 
 const CELL = 48;
@@ -1358,6 +1366,56 @@ export class Rack {
     }
   }
 
+  // A small grey picture ({image: {luma, diff}, mirror}) as big pixels in the
+  // theme's colours, what moves in the brightest, with lines between the
+  // 3×3 zones. Without a picture, why there is none.
+  drawImage(g, w, h, { image, mirror }, dpr) {
+    if (!image) {
+      g.fillStyle = colours['f-med'];
+      g.font = `${10 * dpr}px "JetBrains Mono", monospace`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText('camera runs with audio', w / 2, h / 2);
+      g.textAlign = 'start';
+      return;
+    }
+    const { luma, diff } = image;
+    const n = luma.length;
+    const pw = image.w ?? 48;
+    const ph = n / pw;
+    // dark stays dark in both themes; what moves is drawn in f-high
+    const lum = (c) => c[0] * 0.3 + c[1] * 0.6 + c[2] * 0.1;
+    const [lo, hi] = [rgb(colours['f-low']), rgb(colours['f-med'])].sort((a, b) => lum(a) - lum(b));
+    const top = rgb(colours['f-high']);
+    const pix = (this.pixels ??= document.createElement('canvas'));
+    pix.width = pw;
+    pix.height = ph;
+    const pg = pix.getContext('2d');
+    const img = pg.createImageData(pw, ph);
+    for (let y = 0; y < ph; y++) {
+      for (let x = 0; x < pw; x++) {
+        const k = y * pw + (mirror ? pw - 1 - x : x);
+        const l = luma[k] / 255;
+        const d = Math.min(1, diff[k] / 64);
+        const o = 4 * (y * pw + x);
+        for (let c = 0; c < 3; c++) {
+          const base = lo[c] + (hi[c] - lo[c]) * l;
+          img.data[o + c] = base + (top[c] - base) * d;
+        }
+        img.data[o + 3] = 255;
+      }
+    }
+    pg.putImageData(img, 0, 0);
+    g.imageSmoothingEnabled = false;
+    g.drawImage(pix, 0, 0, w, h);
+    const line = Math.max(1, Math.round(dpr));
+    g.fillStyle = colours.edge;
+    for (const k of [1 / 3, 2 / 3]) {
+      g.fillRect(Math.round(k * w), 0, line, h);
+      g.fillRect(0, Math.round(k * h), w, line);
+    }
+  }
+
   // a touch surface: a crosshair through the point, which grows when pressed
   drawPad(g, w, h, [x, y, press], dpr) {
     const line = Math.max(1, Math.round(dpr));
@@ -1575,6 +1633,10 @@ export class Rack {
     }
     if (data.pad) {
       this.drawPad(g, w, h, data.pad, dpr);
+      return;
+    }
+    if ('image' in data) {
+      this.drawImage(g, w, h, data, dpr);
       return;
     }
     if ('wave' in data) {

@@ -51,6 +51,7 @@ import follow from './follow.js';
 import button from './button.js';
 import pad from './pad.js';
 import gamepad from './gamepad.js';
+import camera from './camera.js';
 
 // A module is a plain object, imported by both the UI and the audio worklet,
 // so it must not touch the DOM:
@@ -70,6 +71,8 @@ import gamepad from './gamepad.js';
 //   onGamepad(s, pads, p)  optional, the game controllers whenever one
 //                        changes: [null or {name, axes, buttons}] (values in
 //                        the browser's standard mapping)
+//   onCamera(s, values, p)  optional, each camera frame (see ui/camera.js);
+//                        the page runs the camera while such a module exists
 //   pad                  optional, [x, y, pressure]: names of params set by
 //                        a touch surface drawn in the display instead of
 //                        knobs; shape() returns {pad: [x, y, pressure]}
@@ -115,7 +118,7 @@ export const groups = [
   ['effects', [delay, reverb, chorus, phaser, granular]],
   ['utilities', [atten, logic, compare, scope, meter, note]],
   ['sound card', [input, follow, output]],
-  ['controllers', [pad, gamepad]],
+  ['controllers', [pad, gamepad, camera]],
   ['midi', [midiIn, midiCcIn, midiClockIn, midiOut, midiCcOut, midiClockOut]],
 ];
 

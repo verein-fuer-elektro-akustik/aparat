@@ -46,6 +46,7 @@ class Aparat extends AudioWorkletProcessor {
     this.gamepadMods = [];
     this.lightMods = []; // modules whose outputs light up (def.lights)
     this.gamepads = null; // the last state of the controllers, for new modules
+    this.cameraMods = [];
     this.displayMods = [];
 
     this.from = new Int32Array(MAX_CABLES);
@@ -121,6 +122,9 @@ class Aparat extends AudioWorkletProcessor {
       case 'midi':
         for (const mod of this.midiMods) mod.def.onMidi(mod.state, m.bytes, mod.param);
         break;
+      case 'camera':
+        for (const mod of this.cameraMods) mod.def.onCamera(mod.state, m.values, mod.param);
+        break;
       case 'gamepad':
         this.gamepads = m.pads;
         for (const mod of this.gamepadMods) mod.def.onGamepad(mod.state, m.pads, mod.param);
@@ -176,6 +180,7 @@ class Aparat extends AudioWorkletProcessor {
     this.mods.push(mod);
     this.byId.set(id, mod);
     if (def.onMidi) this.midiMods.push(mod);
+    if (def.onCamera) this.cameraMods.push(mod);
     if (def.onGamepad) {
       this.gamepadMods.push(mod);
       def.onGamepad(mod.state, this.gamepads, mod.param);
@@ -196,6 +201,7 @@ class Aparat extends AudioWorkletProcessor {
     this.mods.splice(this.mods.indexOf(mod), 1);
     this.midiMods = this.midiMods.filter((m) => m !== mod);
     this.gamepadMods = this.gamepadMods.filter((m) => m !== mod);
+    this.cameraMods = this.cameraMods.filter((m) => m !== mod);
     this.displayMods = this.displayMods.filter((m) => m !== mod);
     this.lightMods = this.lightMods.filter((m) => m !== mod);
     this.smooth = this.smooth.filter((e) => e.arr !== mod.param);

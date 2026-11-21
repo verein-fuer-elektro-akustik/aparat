@@ -3,6 +3,7 @@ import { AudioEngine, listOutputs } from './audio.js';
 import { CableLayer } from './cables.js';
 import { newPatch } from './new-patch.js';
 import { watchGamepads } from './gamepads.js';
+import { Camera, W as CAMERA_W } from './camera.js';
 import { menubar } from './menubar.js';
 import { Midi } from './midi.js';
 import { patches } from './patches.js';
@@ -19,6 +20,30 @@ const $ = (id) => document.getElementById(id);
 
 const audio = new AudioEngine(onEngineMessage);
 const cables = new CableLayer($('cables'), $('rack'));
+
+// The camera runs while audio does and a camera module is in the patch (also
+// inside a composite). Each frame goes to the engine and to the panels.
+const camera = new Camera(({ values, luma, diff }) => {
+  audio.send({ op: 'camera', values });
+  const picture = { w: CAMERA_W, luma, diff };
+  for (const r of editing ? [top, inner] : [top]) {
+    for (const m of r.modules.values()) if (m.type === 'camera') r.drawDisplay(m.id, picture);
+  }
+});
+
+const usesCamera = () => [...top.modules.values()].some((m) => m.type === 'camera' || m.flat?.modules.some((x) => x.type === 'camera'));
+
+function syncCamera() {
+  const want = audio.running && usesCamera();
+  if (want && !camera.on) {
+    camera.start().then(syncCamera, showError);
+  } else if (!want && camera.on) {
+    camera.stop();
+    for (const r of [top, inner]) {
+      for (const m of r.modules.values()) if (m.type === 'camera') r.drawDisplay(m.id, null);
+    }
+  }
+}
 
 const midi = new Midi({
   inSelect: $('midiIn'),
@@ -51,7 +76,10 @@ const top = new Rack({
   content: $('content'),
   cables,
   send: (m) => audio.send(m),
-  onChange: () => undo.changed(),
+  onChange: () => {
+    undo.changed();
+    syncCamera();
+  },
   files: samples,
   onFile: (m, file) => (file ? loadSample(m, file) : chooseSample(m)),
   onContextMenu: moduleMenu,
@@ -692,6 +720,7 @@ function loadPatch(patch) {
   if (patch.midi) midi.setPorts(patch.midi.in, patch.midi.out);
   if (usesInput()) audio.openInput().catch(showError);
   restoreSamples();
+  syncCamera();
 }
 
 // unsaved changes
@@ -933,6 +962,8 @@ async function startAudio() {
   }
   top.replay();
   gamepads.resend();
+  camera.reset();
+  syncCamera();
   buildClipLamps();
   showAudioInfo();
   // outputLatency is often only known once sound is flowing
@@ -951,6 +982,7 @@ function showAudioInfo() {
 async function stopAudio() {
   recorder.stop();
   await audio.stop();
+  syncCamera();
   cables.clearLevels();
   top.clearLive();
   inner.clearLive();
@@ -1564,4 +1596,4 @@ try {
 zoomTo(savedZoom);
 if (!dirty()) undo.reset();
 else patchChanged();
-window.aparat = { get rack() { return rack; }, top, inner, audio, midi, undo };
+window.aparat = { get rack() { return rack; }, top, inner, audio, midi, undo, camera };

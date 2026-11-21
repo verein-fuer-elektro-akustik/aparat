@@ -396,6 +396,25 @@ test('gamepad: sticks, triggers and buttons of the chosen controller', () => {
   assert.ok(Math.abs(o[2] - 5) < 0.01 && Math.abs(o[4] - 5) < 0.01 && Math.abs(o[5] - 10) < 0.01, [...o].join(' '));
 });
 
+test('camera: brightness, motion, where and which zone, mirrored', () => {
+  const e = engine({ modules: [{ id: 1, type: 'camera', params: { smooth: 0.005, thresh: 0.5 } }], cables: [] });
+  const out = registry.camera.outputs;
+  const at = (name) => e.outputs(1)[out.indexOf(name)];
+  // motion at the right of the top row
+  const zones = [0, 0, 0.03, 0, 0, 0, 0, 0, 0];
+  e.send({ op: 'camera', values: [0.4, 0.01, 0.9, 0.8, ...zones] });
+  e.render(0.1);
+  assert.ok(Math.abs(at('bright') - 4) < 0.01, `bright ${at('bright')}`);
+  assert.ok(Math.abs(at('motion') - 1) < 0.01 && at('gate') === 10, `motion ${at('motion')} ${at('gate')}`);
+  // mirrored by default: the right of the picture is the left of the room
+  assert.ok(Math.abs(at('x') - 1) < 0.01 && Math.abs(at('y') - 8) < 0.01, `x ${at('x')} y ${at('y')}`);
+  assert.ok(Math.abs(at('1') - 3) < 0.01 && at('3') < 0.01, `zones ${at('1')} ${at('3')}`);
+  // nothing moves: the gate closes, x and y stay where the motion was
+  e.send({ op: 'camera', values: [0.4, 0, NaN, NaN, ...zones.map(() => 0)] });
+  e.render(0.1);
+  assert.ok(at('gate') === 0 && Math.abs(at('x') - 1) < 0.01, `still ${at('gate')} ${at('x')}`);
+});
+
 test('lit outputs report their loudest in each frame', () => {
   const e = engine({ modules: [{ id: 1, type: 'button' }, { id: 2, type: 'vco' }], cables: [] });
   e.render(0.05);
