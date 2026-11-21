@@ -5,43 +5,50 @@
       "id": 1,
       "type": "midi in",
       "x": 0,
-      "row": 0
+      "row": 0,
+      "color": "#c9b13c"
     },
     {
       "id": 2,
       "type": "vco",
       "x": 3,
-      "row": 0
+      "row": 0,
+      "color": "#3f78c4"
     },
     {
       "id": 3,
       "type": "vcf",
       "x": 6,
-      "row": 0
+      "row": 0,
+      "color": "#3f78c4"
     },
     {
       "id": 4,
       "type": "env",
       "x": 9,
-      "row": 0
+      "row": 0,
+      "color": "#3f78c4"
     },
     {
       "id": 5,
       "type": "vca",
       "x": 11,
-      "row": 0
+      "row": 0,
+      "color": "#3f78c4"
     },
     {
       "id": 6,
       "type": "scope",
       "x": 13,
-      "row": 0
+      "row": 0,
+      "color": "#7e5cc4"
     },
     {
       "id": 7,
       "type": "output",
       "x": 17,
-      "row": 0
+      "row": 0,
+      "color": "#7e5cc4"
     }
   ],
   "cables": [
