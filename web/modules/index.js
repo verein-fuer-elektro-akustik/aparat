@@ -52,6 +52,7 @@ import button from './button.js';
 import pad from './pad.js';
 import gamepad from './gamepad.js';
 import camera from './camera.js';
+import portal from './portal.js';
 
 // A module is a plain object, imported by both the UI and the audio worklet,
 // so it must not touch the DOM:
@@ -73,6 +74,9 @@ import camera from './camera.js';
 //                        the browser's standard mapping)
 //   onCamera(s, values, p)  optional, each camera frame (see ui/camera.js);
 //                        the page runs the camera while such a module exists
+//   outbox(s)            optional, after each block: data for the page or
+//                        null; the page answers with onPortal(s, data, p, id)
+//                        (see modules/portal.js and ui/portal.js)
 //   pad                  optional, [x, y, pressure]: names of params set by
 //                        a touch surface drawn in the display instead of
 //                        knobs; shape() returns {pad: [x, y, pressure]}
@@ -116,7 +120,7 @@ export const groups = [
   ['drums', [kick, hat, clap]],
   ['filters, mixing and shaping', [vcf, eq, vca, mixer, matrix, pan, xfade, fold, drive, crush, slew, sampleHold, quant]],
   ['effects', [delay, reverb, chorus, phaser, granular]],
-  ['utilities', [atten, logic, compare, scope, meter, note]],
+  ['utilities', [atten, logic, compare, scope, meter, note, portal]],
   ['sound card', [input, follow, output]],
   ['controllers', [pad, gamepad, camera]],
   ['midi', [midiIn, midiCcIn, midiClockIn, midiOut, midiCcOut, midiClockOut]],

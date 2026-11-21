@@ -47,6 +47,7 @@ class Aparat extends AudioWorkletProcessor {
     this.lightMods = []; // modules whose outputs light up (def.lights)
     this.gamepads = null; // the last state of the controllers, for new modules
     this.cameraMods = [];
+    this.portalMods = []; // modules that talk to the page each block (outbox, onPortal)
     this.displayMods = [];
 
     this.from = new Int32Array(MAX_CABLES);
@@ -122,6 +123,9 @@ class Aparat extends AudioWorkletProcessor {
       case 'midi':
         for (const mod of this.midiMods) mod.def.onMidi(mod.state, m.bytes, mod.param);
         break;
+      case 'portal':
+        for (const mod of this.portalMods) mod.def.onPortal(mod.state, m, mod.param, mod.id);
+        break;
       case 'camera':
         for (const mod of this.cameraMods) mod.def.onCamera(mod.state, m.values, mod.param);
         break;
@@ -181,6 +185,7 @@ class Aparat extends AudioWorkletProcessor {
     this.byId.set(id, mod);
     if (def.onMidi) this.midiMods.push(mod);
     if (def.onCamera) this.cameraMods.push(mod);
+    if (def.outbox) this.portalMods.push(mod);
     if (def.onGamepad) {
       this.gamepadMods.push(mod);
       def.onGamepad(mod.state, this.gamepads, mod.param);
@@ -202,6 +207,8 @@ class Aparat extends AudioWorkletProcessor {
     this.midiMods = this.midiMods.filter((m) => m !== mod);
     this.gamepadMods = this.gamepadMods.filter((m) => m !== mod);
     this.cameraMods = this.cameraMods.filter((m) => m !== mod);
+    this.portalMods = this.portalMods.filter((m) => m !== mod);
+    if (mod.def.outbox) this.port.postMessage({ type: 'outbox', list: [{ id: mod.id, gone: true }] });
     this.displayMods = this.displayMods.filter((m) => m !== mod);
     this.lightMods = this.lightMods.filter((m) => m !== mod);
     this.smooth = this.smooth.filter((e) => e.arr !== mod.param);
@@ -400,6 +407,15 @@ class Aparat extends AudioWorkletProcessor {
         for (let f = 0; f < frames; f++) data[f * channels + c] = buf[f];
       }
       this.port.postMessage({ type: 'rec', channels, data }, [data.buffer]);
+    }
+
+    if (this.portalMods.length) {
+      const list = [];
+      for (const m of this.portalMods) {
+        const data = m.def.outbox(m.state);
+        if (data) list.push({ id: m.id, ...data });
+      }
+      if (list.length) this.port.postMessage({ type: 'outbox', list });
     }
 
     this.busy += Date.now() - t0;

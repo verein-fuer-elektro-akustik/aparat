@@ -415,6 +415,57 @@ test('camera: brightness, motion, where and which zone, mirrored', () => {
   assert.ok(at('gate') === 0 && Math.abs(at('x') - 1) < 0.01, `still ${at('gate')} ${at('x')}`);
 });
 
+test('portal: what one sends, the others on its channel put out', () => {
+  const e = engine({
+    modules: [{ id: 1, type: 'button' }, { id: 2, type: 'portal' }, { id: 3, type: 'portal' }, { id: 4, type: 'portal', params: { channel: 2 } }],
+    cables: [{ from: [1, 'gate'], to: [2, '1'] }],
+  });
+  // the page's part: keep what each portal sends, hand all of it back
+  const senders = new Map();
+  let seen = 0;
+  const relay = () => {
+    const posted = e.posted();
+    for (; seen < posted.length; seen++) {
+      const m = posted[seen];
+      if (m.type !== 'outbox') continue;
+      for (const x of m.list) {
+        const key = `t:${x.id}`;
+        if (x.gone) senders.delete(key);
+        else senders.set(key, { key, tab: null, ...x });
+      }
+      e.send({ op: 'portal', senders: [...senders.values()], fresh: m.list.map((x) => `t:${x.id}`) });
+    }
+  };
+  const play = (seconds) => {
+    for (let t = 0; t < seconds; t += 0.01) {
+      e.render(0.01);
+      relay();
+    }
+  };
+  e.send({ op: 'param', id: 1, i: 0, v: 1 });
+  play(0.05);
+  assert.equal(e.outputs(3)[0], 10, 'same channel: the gate arrives');
+  assert.equal(e.outputs(4)[0], 0, 'other channel: nothing');
+  assert.equal(e.outputs(2)[0], 0, 'a portal does not hear itself');
+  e.send({ op: 'param', id: 1, i: 0, v: 0 });
+  play(0.05);
+  assert.equal(e.outputs(3)[0], 0);
+  // a trigger shorter than a block still arrives as a pulse
+  const def = registry.portal;
+  const s = def.create(SR, {});
+  const from = { key: 'x:9', tab: 'x', id: 9, ch: 1, last: [0, 0, 0, 0], peak: [10, 0, 0, 0] };
+  def.onPortal(s, { senders: [from], fresh: ['x:9'] }, [1], 1);
+  const o = new Float64Array(4);
+  def.process(s, [0, 0, 0, 0], o, [1]);
+  assert.equal(o[0], 10);
+  for (let n = 0; n < SR * 0.003; n++) def.process(s, [0, 0, 0, 0], o, [1]);
+  assert.equal(o[0], 0);
+  // handed over again without being fresh, it does not fire again
+  def.onPortal(s, { senders: [from], fresh: [] }, [1], 1);
+  def.process(s, [0, 0, 0, 0], o, [1]);
+  assert.equal(o[0], 0);
+});
+
 test('lit outputs report their loudest in each frame', () => {
   const e = engine({ modules: [{ id: 1, type: 'button' }, { id: 2, type: 'vco' }], cables: [] });
   e.render(0.05);

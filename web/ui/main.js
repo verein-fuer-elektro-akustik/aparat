@@ -4,6 +4,7 @@ import { CableLayer } from './cables.js';
 import { newPatch } from './new-patch.js';
 import { watchGamepads } from './gamepads.js';
 import { Camera, W as CAMERA_W } from './camera.js';
+import { makePortals } from './portal.js';
 import { menubar } from './menubar.js';
 import { Midi } from './midi.js';
 import { patches } from './patches.js';
@@ -886,6 +887,9 @@ function onEngineMessage(m) {
     case 'midi':
       midi.send(m.data);
       break;
+    case 'outbox':
+      portals.fromEngine(m.list);
+      break;
     case 'rec':
       recorder.onBlock(m);
       break;
@@ -943,6 +947,9 @@ function onMidiMessage(data) {
   if ((data[0] & 0xf0) === 0xb0 && data[0] < 0xf0) top.handleCc((data[0] & 15) + 1, data[1], data[2]);
 }
 
+// portals: wireless cables to other tabs (modules/portal.js)
+const portals = makePortals((m) => audio.running && audio.send(m));
+
 // game controllers, sent while the engine runs (true: it was sent)
 const gamepads = watchGamepads((m) => {
   if (!audio.running) return false;
@@ -964,6 +971,7 @@ async function startAudio() {
   gamepads.resend();
   camera.reset();
   syncCamera();
+  portals.started();
   buildClipLamps();
   showAudioInfo();
   // outputLatency is often only known once sound is flowing
@@ -983,6 +991,7 @@ async function stopAudio() {
   recorder.stop();
   await audio.stop();
   syncCamera();
+  portals.stopped();
   cables.clearLevels();
   top.clearLive();
   inner.clearLive();
