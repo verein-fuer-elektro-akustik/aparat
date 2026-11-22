@@ -495,6 +495,19 @@ test('portal: what one sends, the others on its channel put out', () => {
   assert.equal(o[0], 0);
 });
 
+test('bypass passes the input straight through, and the module comes back', () => {
+  // slew with a long rise: bypassed, a step goes through at once
+  const e = engine({ modules: [{ id: 1, type: 'button' }, { id: 2, type: 'slew', params: { rise: 2, bypass: 1 } }], cables: [{ from: [1, 'gate'], to: [2, 'in'] }] });
+  e.send({ op: 'param', id: 1, i: 0, v: 1 });
+  e.render(0.02);
+  assert.equal(e.outputs(2)[0], 10);
+  // switched back on, it starts over and glides up from 0
+  e.send({ op: 'param', id: 2, i: 2, v: 0 });
+  e.render(0.1);
+  const gliding = e.outputs(2)[0];
+  assert.ok(gliding > 0 && gliding < 2, `gliding ${gliding}`);
+});
+
 test('lit outputs report their loudest in each frame', () => {
   const e = engine({ modules: [{ id: 1, type: 'button' }, { id: 2, type: 'vco' }], cables: [] });
   e.render(0.05);

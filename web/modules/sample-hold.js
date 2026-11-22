@@ -5,6 +5,7 @@ export default {
   inputs: { in: 0, trig: 0 },
   outputs: ['out'],
   kinds: { in: { trig: 'gate' } },
+  bypass: { out: 'in' },
   params: {},
   create: () => ({ held: 0, high: false }),
   process(s, i, o) {

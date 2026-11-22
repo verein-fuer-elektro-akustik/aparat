@@ -11,6 +11,7 @@ export default {
   cols: 2,
   inputs: { in: 0 },
   outputs: ['out'],
+  bypass: { out: 'in' },
   params: { rise: time, fall: time },
   create: (sr) => ({ sr, y: 0, rise: 0, fall: 0, cr: 1, cf: 1 }),
   process(s, i, o, p) {

@@ -38,6 +38,7 @@ export default {
   inputs: { in: 0 },
   outputs: ['out', 'trig'],
   kinds: { out: { out: 'pitch', trig: 'gate' } },
+  bypass: { out: 'in' },
   lights: ['trig'],
   params: {
     scale: { min: 0, max: SCALES.length - 1, default: 2, step: 1, format: (v) => SCALES[v][0] },
