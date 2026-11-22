@@ -389,7 +389,7 @@ test('pad: x and y as voltages, gate while pressed, glide', () => {
   assert.ok(x > -2.5 && x < 2.5, `gliding ${x}`);
 });
 
-test('gamepad: sticks, triggers and buttons of the chosen controller', () => {
+test('gamepad: sticks, triggers and buttons of the controllers switched on', () => {
   const e = engine({ modules: [{ id: 1, type: 'gamepad' }], cables: [] });
   const buttons = Array(17).fill(0);
   const out = registry.gamepad.outputs;
@@ -401,16 +401,26 @@ test('gamepad: sticks, triggers and buttons of the chosen controller', () => {
   assert.deepEqual(level(), [0, 0]); // no controller yet
   e.send({ op: 'gamepad', pads: [null, { name: 'test', axes: [0, -1, 0, 0], buttons: [1, ...buttons.slice(1)] }, null, null] });
   assert.deepEqual(level(), [0, 0]); // it is pad 2, the module listens to pad 1
-  e.send({ op: 'param', id: 1, i: 0, v: 2 });
+  e.send({ op: 'param', id: 1, i: 0, v: 0 });
+  e.send({ op: 'param', id: 1, i: 1, v: 1 });
   const [up, a] = level();
   // stick up is +5 V, a button 10 V
   assert.ok(Math.abs(up - 5) < 0.01 && a === 10, `${up} ${a}`);
+  // pads 2 and 3 together: sticks add up (and clip), buttons of either count
+  e.send({ op: 'gamepad', pads: [null, { name: 'p2', axes: [0, -0.5, 0, 0], buttons }, { name: 'p3', axes: [0, -1, 0, 0], buttons: [1, ...buttons.slice(1)] }, null] });
+  e.send({ op: 'param', id: 1, i: 2, v: 1 });
+  const [both, either] = level();
+  assert.ok(Math.abs(both - 5) < 0.01 && either === 10, `${both} ${either}`);
+  e.send({ op: 'param', id: 1, i: 1, v: 0 });
+  e.send({ op: 'param', id: 1, i: 2, v: 0 });
+  const none = level();
+  assert.ok(Math.abs(none[0]) < 1e-6 && none[1] === 0, `none switched on: ${none}`);
   // a module added later hears the last state at once
   const g = registry.gamepad;
   const s = g.create(SR, {});
-  g.onGamepad(s, [{ name: 'x', axes: [0.05, 0, 1, 0], buttons: [0, 0, 0, 0, 0, 0, 0.5, 1] }], [1]);
+  g.onGamepad(s, [{ name: 'x', axes: [0.05, 0, 1, 0], buttons: [0, 0, 0, 0, 0, 0, 0.5, 1] }], [1, 0, 0, 0]);
   const o = new Float64Array(g.outputs.length);
-  for (let n = 0; n < SR * 0.05; n++) g.process(s, [], o, [1]);
+  for (let n = 0; n < SR * 0.05; n++) g.process(s, [], o, [1, 0, 0, 0]);
   assert.equal(o[0], 0); // inside the dead zone
   assert.ok(Math.abs(o[2] - 5) < 0.01 && Math.abs(o[4] - 5) < 0.01 && Math.abs(o[5] - 10) < 0.01, [...o].join(' '));
 });
