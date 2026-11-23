@@ -63,6 +63,7 @@
         <button id="zoomIn" role="menuitem" data-keep>zoom in <kbd>+</kbd></button>
         <button id="zoomOut" role="menuitem" data-keep>zoom out <kbd>−</kbd></button>
         <button id="zoomReset" role="menuitem">actual size <kbd>0</kbd></button>
+        <button id="showAll" role="menuitem">show the whole patch <kbd>1</kbd></button>
       </div>
     </div>
     <div class="menu" data-menu="audio">
@@ -119,7 +120,7 @@
 <div id="error" role="alert"></div>
 <div id="dropzone" hidden><span></span></div>
 <div id="stage">
-  <div id="rack" class="scroller"><div id="sizer" class="sizer"><div id="content" class="content"></div></div></div>
+  <div id="rack" class="scroller"><div id="content" class="content"></div></div>
   <canvas id="cables" class="cables"></canvas>
   <!-- the inside of a composite, over the patch while it is edited -->
   <div id="inner" hidden>
@@ -129,7 +130,7 @@
       <button id="innerDone" title="back to the patch (esc)">done</button>
     </div>
     <div id="innerStage">
-      <div id="innerRack" class="scroller"><div id="innerSizer" class="sizer"><div id="innerContent" class="content"></div></div></div>
+      <div id="innerRack" class="scroller"><div id="innerContent" class="content"></div></div>
       <canvas id="innerCables" class="cables"></canvas>
     </div>
   </div>

@@ -73,7 +73,6 @@ function moduleMenu(e, m) {
 // while a composite is open (see "editing composites" below).
 const top = new Rack({
   scroller: $('rack'),
-  sizer: $('sizer'),
   content: $('content'),
   cables,
   send: (m) => audio.send(m),
@@ -91,7 +90,6 @@ const innerCables = new CableLayer($('innerCables'), $('innerRack'));
 innerCables.setPeaks(new Float32Array(0));
 const inner = new Rack({
   scroller: $('innerRack'),
-  sizer: $('innerSizer'),
   content: $('innerContent'),
   cables: innerCables,
   send: (m) => forwardInner(m),
@@ -385,8 +383,7 @@ function reloadInside(fresh = false) {
     leaveTo(0);
     return;
   }
-  const view = $('innerRack');
-  const keep = fresh ? null : [view.scrollLeft, view.scrollTop];
+  const keep = fresh ? null : { ...inner.pan };
   const selectedIds = fresh ? [] : [...inner.selection].map((m) => m.id);
   // shown first: the rack measures its jacks to draw the cables
   $('inner').hidden = false;
@@ -405,8 +402,7 @@ function reloadInside(fresh = false) {
   rack = inner;
   // the edit view opens at the patch's zoom
   if (fresh) inner.setZoom(top.zoom);
-  if (keep) [view.scrollLeft, view.scrollTop] = keep;
-  else view.scrollTo(0, 0);
+  inner.setPan(keep?.x ?? 0, keep?.y ?? 0);
   crumbs();
   zoomShown();
 }
@@ -716,6 +712,8 @@ function loadPatch(patch) {
   } finally {
     undo.quiet = false;
   }
+  // a patch opens at the top left of the rack
+  top.setPan(0, 0);
   undo.commit();
   // a patch without midi settings (new, default, older files) keeps the ports
   if (patch.midi) midi.setPorts(patch.midi.in, patch.midi.out);
@@ -844,7 +842,7 @@ window.addEventListener('drop', guarded(async (e) => {
   e.preventDefault();
   if (isPatchFile(file)) return importPatch(file);
   const cell = rack.cellAt(e.clientX, e.clientY);
-  if (e.target === $('content') && cell) loadSample(rack.insert('sampler', cell), file);
+  if ((e.target === $('content') || e.target === $('rack')) && cell) loadSample(rack.insert('sampler', cell), file);
 }));
 
 function usesInput() {
@@ -1024,7 +1022,7 @@ async function addModule(name) {
   const cell = menuCell;
   closeMenu();
   const m = cell ? rack.insert(name, cell) : rack.add(name);
-  m.el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  rack.reveal(m);
   if (name === 'input') await audio.openInput();
 }
 
@@ -1143,8 +1141,8 @@ for (const [scroller, content] of [[$('rack'), $('content')], [$('innerRack'), $
     rack.selectCable(cable);
     openContext(e.clientX, e.clientY, rack.cableName(cable), [['remove', () => rack.disconnect(cable)]]);
   }, true);
-  content.addEventListener('contextmenu', (e) => {
-    if (e.target !== content) return;
+  scroller.addEventListener('contextmenu', (e) => {
+    if (e.target !== content && e.target !== scroller) return;
     e.preventDefault();
     closeContext();
     openMenu(e.clientX, e.clientY, rack.cellAt(e.clientX, e.clientY));
@@ -1396,6 +1394,11 @@ function zoomTo(z, clientX, clientY) {
 $('zoomIn').addEventListener('click', () => zoomTo(zoomStep(1)));
 $('zoomOut').addEventListener('click', () => zoomTo(zoomStep(-1)));
 $('zoomReset').addEventListener('click', () => zoomTo(1));
+$('showAll').addEventListener('click', () => showAll());
+function showAll() {
+  rack.showAll();
+  zoomTo(rack.zoom); // the buttons and the remembered zoom follow
+}
 // ctrl+wheel, which is also what a trackpad pinch sends
 $('stage').addEventListener('wheel', (e) => {
   if (!e.ctrlKey) return;
@@ -1489,6 +1492,7 @@ window.addEventListener('keydown', (e) => {
     if (e.key === '+' || e.key === '=') return zoomTo(zoomStep(1), ...at);
     if (e.key === '-') return zoomTo(zoomStep(-1), ...at);
     if (e.key === '0') return zoomTo(1, ...at);
+    if (e.key === '1') return showAll();
   }
   if ((e.key === 'Delete' || e.key === 'Backspace') && menu.hidden) {
     // the cable under the pointer goes first, then the selection
@@ -1507,7 +1511,7 @@ window.addEventListener('keydown', (e) => {
 // can't be learned; the rest, also the playing keyboard's, can, and a linked
 // key then plays its button instead of a note. Links live in the patch, so
 // they are learned outside the edit view.
-const TAKEN = new Set(['Escape', 'Delete', 'Backspace', 'Tab', 'Equal', 'Minus', 'Digit0', 'Slash', 'NumpadAdd', 'NumpadSubtract']);
+const TAKEN = new Set(['Escape', 'Delete', 'Backspace', 'Tab', 'Equal', 'Minus', 'Digit0', 'Digit1', 'Slash', 'NumpadAdd', 'NumpadSubtract']);
 
 function playKey(e) {
   if (rack !== top && rack.learning) return false;
@@ -1613,6 +1617,7 @@ try {
   savedZoom = Number(localStorage.getItem('aparat.zoom')) || 1;
 } catch {}
 zoomTo(savedZoom);
+top.setPan(0, 0); // from the top left, whatever the zoom
 if (!dirty()) undo.reset();
 else patchChanged();
 window.aparat = { get rack() { return rack; }, top, inner, audio, midi, undo, camera };

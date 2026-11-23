@@ -62,6 +62,7 @@ export class CableLayer {
     this.bySlot = [];
     this.ghost = null;
     this.zoom = 1;
+    this.pan = { x: 0, y: 0 }; // the rack's origin in the view (Rack.applyView)
     this.highlight = new Set();
     this.selected = null;
     this.reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -155,10 +156,10 @@ export class CableLayer {
   }
 
   draw(t) {
-    const { ctx, scroller, dpr } = this;
+    const { ctx, dpr } = this;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, this.canvas.clientWidth, this.canvas.clientHeight);
-    ctx.translate(-scroller.scrollLeft, -scroller.scrollTop);
+    ctx.translate(this.pan.x, this.pan.y);
     ctx.scale(this.zoom, this.zoom);
     ctx.lineCap = 'round';
 

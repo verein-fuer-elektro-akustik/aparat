@@ -305,11 +305,17 @@ label.menu-row { justify-content: space-between; gap: 1rem; }
 .scroller {
   position: absolute;
   inset: 0;
-  overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--f-low) transparent;
+  overflow: hidden;
+  overscroll-behavior: none;
+  /* the grid, scaled and moved with the rack (see Rack.applyView) */
+  background-color: var(--background);
+  background-image:
+    linear-gradient(to bottom, var(--edge) 1px, transparent 1px),
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: var(--zrow) var(--zrow), var(--zcell) var(--zcell), var(--zcell) var(--zcell);
+  cursor: grab;
 }
-.sizer { position: relative; overflow: hidden; }
 #patchName {
   font: inherit;
   width: 100%;
@@ -326,14 +332,9 @@ button:disabled { color: var(--f-low); cursor: default; border-color: var(--edge
   position: absolute;
   left: 0;
   top: 0;
+  width: 0;
+  height: 0;
   transform-origin: 0 0;
-  background-color: var(--background);
-  background-image:
-    linear-gradient(to bottom, var(--edge) 1px, transparent 1px),
-    linear-gradient(to right, var(--grid) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
-  background-size: 100% calc(var(--cell) * 8), var(--cell) var(--cell), var(--cell) var(--cell);
-  cursor: grab;
 }
 body.panning, body.panning * { cursor: grabbing !important; }
 .drop { position: absolute; border: 1px dashed var(--f-low); pointer-events: none; }

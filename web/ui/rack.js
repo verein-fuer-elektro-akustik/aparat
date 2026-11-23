@@ -24,7 +24,6 @@ const CELL = 48;
 const CELLS = 8;
 const ROW = CELL * CELLS;
 const EDGE = 40;
-const CABLE_MARGIN = 8; // room for the cable stroke at the edge of the rack
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 2;
 
@@ -60,7 +59,7 @@ function peaksOf(samples) {
 }
 
 export class Rack {
-  constructor({ scroller, sizer, content, cables, send, onChange, onContextMenu, onOpen, files, onFile }) {
+  constructor({ scroller, content, cables, send, onChange, onContextMenu, onOpen, files, onFile }) {
     this.onContextMenu = onContextMenu ?? (() => {});
     this.onOpen = onOpen ?? (() => {}); // double-click on a module's title
     // audio files of modules like the sampler: files.get(name) is the loaded
@@ -69,9 +68,11 @@ export class Rack {
     this.files = files ?? { get: () => undefined };
     this.onFile = onFile ?? (() => {});
     this.scroller = scroller;
-    this.sizer = sizer;
     this.content = content;
     this.zoom = 1;
+    // where the rack's origin is in the view, in screen pixels: the view is
+    // endless, it pans and zooms over the rack without bounds
+    this.pan = { x: 0, y: 0 };
     this.cables = cables;
     this.send = send;
     this.onChange = onChange;
@@ -89,19 +90,8 @@ export class Rack {
     this.midiMap = [];
     this.keyMap = []; // {id, param, key}: computer keys on buttons and switches
     this.held = new Map(); // key code -> the knobs it holds down
-    this.rows = 1;
     this.drop = div('drop', content);
     this.drop.hidden = true;
-    // next frame: resizing inside the observer callback would loop
-    let resizeQueued = false;
-    new ResizeObserver(() => {
-      if (resizeQueued) return;
-      resizeQueued = true;
-      requestAnimationFrame(() => {
-        resizeQueued = false;
-        this.updateExtent();
-      });
-    }).observe(scroller);
     // Pan: left-drag on empty rack space, middle-drag anywhere. Capture phase,
     // so a middle-drag over a knob or jack pans instead of turning or patching.
     scroller.addEventListener('pointerdown', (e) => {
@@ -113,9 +103,23 @@ export class Rack {
         this.selectCable(this.cableAt(e));
         return;
       }
-      if (e.button === 0 && e.target === content && e.shiftKey) this.startBand(e);
-      else if (e.button === 1 || (e.button === 0 && e.target === content)) this.startPan(e);
+      const empty = e.target === content || e.target === scroller;
+      if (e.button === 0 && empty && e.shiftKey) this.startBand(e);
+      else if (e.button === 1 || (e.button === 0 && empty)) this.startPan(e);
     }, true);
+    // the wheel pans (shift: sideways); ctrl+wheel zooms (main.js), and a
+    // knob under the pointer takes the wheel itself
+    scroller.addEventListener('wheel', (e) => {
+      if (e.ctrlKey || e.metaKey || e.defaultPrevented) return;
+      const area = e.target.closest('textarea');
+      if (area && area.scrollHeight > area.clientHeight) return;
+      e.preventDefault();
+      const unit = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? scroller.clientHeight : 1;
+      let dx = e.deltaX * unit;
+      let dy = e.deltaY * unit;
+      if (e.shiftKey && !dx) [dx, dy] = [dy, 0];
+      this.panBy(-dx, -dy);
+    }, { passive: false });
     // stop the browser's middle-click autoscroll
     scroller.addEventListener('mousedown', (e) => {
       if (e.button === 1) e.preventDefault();
@@ -135,7 +139,7 @@ export class Rack {
       this.hoverCable = null;
       this.cables.setHighlight(null);
     });
-    this.updateExtent();
+    this.applyView();
   }
 
   // patch editing
@@ -168,7 +172,6 @@ export class Rack {
     this.modules.set(m.id, m);
     this.measure(m);
     this.sendAdd(m);
-    this.updateExtent();
     this.onChange();
     return m;
   }
@@ -206,7 +209,6 @@ export class Rack {
     this.sendRemove(m);
     m.el.remove();
     this.modules.delete(m.id);
-    this.updateExtent();
     this.onChange();
   }
 
@@ -220,7 +222,6 @@ export class Rack {
     this.cables.add(cable);
     this.layoutCable(cable);
     this.sendConnect(cable);
-    this.updateExtent();
     this.onChange();
     return cable;
   }
@@ -231,7 +232,6 @@ export class Rack {
       this.freeSlots.push(slot);
       this.send({ op: 'disconnect', slot });
     }
-    this.updateExtent();
     this.onChange();
   }
 
@@ -253,7 +253,6 @@ export class Rack {
     this.arrange(m, x, row, snap, true);
     this.place(m);
     this.relayoutCables();
-    this.updateExtent();
     this.onChange();
     return m;
   }
@@ -341,7 +340,7 @@ export class Rack {
     const mods = [...made.values()];
     this.select(null);
     for (const m of mods) this.select(m, true);
-    mods[0].el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    this.reveal(mods[0]);
     return mods;
   }
 
@@ -356,8 +355,8 @@ export class Rack {
     if (clientX < view.left || clientX > view.right || clientY < view.top || clientY > view.bottom) return null;
     const p = this.pointer({ clientX, clientY });
     return {
-      x: Math.max(0, Math.floor(p.x / CELL)),
-      row: Math.min(this.rows - 1, Math.max(0, Math.floor(p.y / ROW))),
+      x: Math.floor(p.x / CELL),
+      row: Math.floor(p.y / ROW),
     };
   }
 
@@ -370,16 +369,83 @@ export class Rack {
     const view = this.scroller.getBoundingClientRect();
     const ax = (clientX ?? view.left + view.width / 2) - view.left;
     const ay = (clientY ?? view.top + view.height / 2) - view.top;
-    const px = (this.scroller.scrollLeft + ax) / this.zoom;
-    const py = (this.scroller.scrollTop + ay) / this.zoom;
+    const px = (ax - this.pan.x) / this.zoom;
+    const py = (ay - this.pan.y) / this.zoom;
     this.zoom = z;
     this.cables.zoom = z;
-    this.content.style.transform = z === 1 ? '' : `scale(${z})`;
     // displays draw at the zoomed size, to stay sharp
     for (const m of this.modules.values()) if (m.canvas) this.queuePaint(m);
-    this.updateExtent();
-    this.scroller.scrollLeft = px * z - ax;
-    this.scroller.scrollTop = py * z - ay;
+    this.setPan(ax - px * z, ay - py * z);
+  }
+
+  // pan
+
+  setPan(x, y) {
+    this.pan.x = Math.round(x);
+    this.pan.y = Math.round(y);
+    this.applyView();
+  }
+
+  panBy(dx, dy) {
+    this.setPan(this.pan.x + dx, this.pan.y + dy);
+  }
+
+  // The rack moves by a transform; the grid is the view's background, so it
+  // goes on forever.
+  applyView() {
+    const { x, y } = this.pan;
+    const z = this.zoom;
+    this.content.style.transform = `translate(${x}px, ${y}px) scale(${z})`;
+    const st = this.scroller.style;
+    st.setProperty('--zcell', `${CELL * z}px`);
+    st.setProperty('--zrow', `${ROW * z}px`);
+    st.backgroundPosition = `${x}px ${y}px`;
+    this.cables.pan = this.pan;
+  }
+
+  // Zoom and pan so the whole patch is in view, centred: modules and the
+  // cables hanging below them, at most at actual size. An empty rack goes
+  // back to its top left.
+  showAll() {
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const m of this.modules.values()) {
+      x0 = Math.min(x0, m.left);
+      y0 = Math.min(y0, m.top);
+      x1 = Math.max(x1, m.left + m.def.cols * CELL);
+      y1 = Math.max(y1, m.top + ROW);
+    }
+    for (const c of this.cables.list) {
+      for (let k = 0; k < c.pts.length; k += 2) {
+        x0 = Math.min(x0, c.pts[k]);
+        x1 = Math.max(x1, c.pts[k]);
+        y0 = Math.min(y0, c.pts[k + 1]);
+        y1 = Math.max(y1, c.pts[k + 1]);
+      }
+    }
+    if (x0 === Infinity) {
+      this.setZoom(1);
+      this.setPan(0, 0);
+      return;
+    }
+    const margin = 24; // screen pixels around the patch
+    const vw = this.scroller.clientWidth;
+    const vh = this.scroller.clientHeight;
+    this.setZoom(Math.min(1, (vw - 2 * margin) / (x1 - x0), (vh - 2 * margin) / (y1 - y0)));
+    const z = this.zoom;
+    this.setPan((vw - (x1 - x0) * z) / 2 - x0 * z, (vh - (y1 - y0) * z) / 2 - y0 * z);
+  }
+
+  // Pan the least that brings m (or as much of it as fits) into view.
+  reveal(m) {
+    const view = this.scroller.getBoundingClientRect();
+    const r = m.el.getBoundingClientRect();
+    const shift = (lo, hi, vlo, vhi) => (lo < vlo || hi - lo > vhi - vlo ? vlo - lo + 8 : hi > vhi ? vhi - hi - 8 : 0);
+    const dx = shift(r.left, r.right, view.left, view.right);
+    const dy = shift(r.top, r.bottom, view.top, view.bottom);
+    if (dx || dy) this.panBy(dx, dy);
   }
 
   // engine
@@ -589,7 +655,6 @@ export class Rack {
     for (const e of this.midiMap) this.knobFor(e)?.el.classList.add('mapped');
     this.setKeyMap(patch.keyMap);
     this.relayoutCables();
-    this.updateExtent();
     this.onChange();
   }
 
@@ -967,7 +1032,7 @@ export class Rack {
   // takes clicks itself.
   cableAt(e) {
     if (e.target !== this.content && e.target.closest('.knob, .jack, button, .title, canvas, textarea')) return null;
-    if (!this.content.contains(e.target)) return null;
+    if (!this.scroller.contains(e.target)) return null;
     const p = this.pointer(e);
     return this.cables.hit(p.x, p.y, 6 / this.zoom);
   }
@@ -987,33 +1052,37 @@ export class Rack {
     return false;
   }
 
+  // a free place in view, from its top left; else a new row under the patch
   findSpot(cols) {
-    const perRow = Math.max(cols, Math.floor(this.scroller.clientWidth / this.zoom / CELL));
-    const used = Math.max(-1, ...[...this.modules.values()].map((m) => m.row));
-    for (let row = 0; row <= used; row++) {
-      for (let x = 0; x + cols <= perRow; x++) {
+    const z = this.zoom;
+    const x0 = Math.ceil(-this.pan.x / z / CELL);
+    const row0 = Math.ceil(-this.pan.y / z / ROW);
+    const perRow = Math.max(cols, Math.floor(this.scroller.clientWidth / z / CELL) - 1);
+    const rows = Math.max(1, Math.floor(this.scroller.clientHeight / z / ROW));
+    for (let row = row0; row < row0 + rows; row++) {
+      for (let x = x0; x + cols <= x0 + perRow; x++) {
         if (!this.overlaps(cols, x, row)) return { x, row };
       }
     }
-    return { x: 0, row: used + 1 };
+    const used = Math.max(row0 - 1, ...[...this.modules.values()].map((m) => m.row));
+    return { x: x0, row: used + 1 };
   }
 
   // Push modules right until nothing overlaps, e.g. after loading an old patch.
   unoverlap() {
     const list = [...this.modules.values()].sort((a, b) => a.row - b.row || a.x - b.x);
     let row = -1;
-    let cursor = 0;
+    let cursor = -Infinity;
     for (const m of list) {
       if (m.row !== row) {
         row = m.row;
-        cursor = 0;
+        cursor = -Infinity;
       }
       m.x = Math.max(m.x, cursor);
       cursor = m.x + m.def.cols;
       this.place(m);
     }
     this.relayoutCables();
-    this.updateExtent();
   }
 
   // Put m at x in row and push the row's other modules out of the way:
@@ -1029,19 +1098,13 @@ export class Rack {
       o.row = s.row;
     }
     const others = [...snap.keys()].filter((o) => o !== m && o.row === row);
-    let right = others;
-    for (let pass = 0; pass < 4; pass++) {
-      const centre = x + cols / 2;
-      const left = others.filter((o) => (byStart ? o.x < x : o.x + o.def.cols / 2 < centre)).sort((a, b) => b.x - a.x);
-      right = others.filter((o) => !left.includes(o)).sort((a, b) => a.x - b.x);
-      for (const o of others) o.x = snap.get(o).x;
-      let cursor = x;
-      for (const o of left) {
-        o.x = Math.min(o.x, cursor - o.def.cols);
-        cursor = o.x;
-      }
-      if (cursor >= 0) break;
-      x -= cursor;
+    const centre = x + cols / 2;
+    const left = others.filter((o) => (byStart ? o.x < x : o.x + o.def.cols / 2 < centre)).sort((a, b) => b.x - a.x);
+    const right = others.filter((o) => !left.includes(o)).sort((a, b) => a.x - b.x);
+    let edge = x;
+    for (const o of left) {
+      o.x = Math.min(o.x, edge - o.def.cols);
+      edge = o.x;
     }
     let cursor = x + cols;
     for (const o of right) {
@@ -1060,51 +1123,9 @@ export class Rack {
   autoScroll(e) {
     const r = this.scroller.getBoundingClientRect();
     const step = (d) => (d < EDGE ? Math.ceil((EDGE - d) / 4) : 0);
-    this.scroller.scrollLeft += step(r.right - e.clientX) - step(e.clientX - r.left);
-    this.scroller.scrollTop += step(r.bottom - e.clientY) - step(e.clientY - r.top);
-  }
-
-  // The scroll area is the space the modules and the cables hanging between
-  // them take, at least the view, so there are scrollbars only when the patch
-  // reaches beyond the view. While
-  // dragging, `ahead` ({right, bottom} in rack pixels) grows it in front of the
-  // dragged module, so it can be pushed further out (with auto-scroll).
-  updateExtent(ahead = null) {
-    let right = 0;
-    let bottom = 0;
-    for (const m of this.modules.values()) {
-      right = Math.max(right, (m.x + m.def.cols) * CELL);
-      bottom = Math.max(bottom, (m.row + 1) * ROW);
-    }
-    // cables sag below the jacks they connect, also below the last row
-    for (const c of this.cables.list) {
-      const pts = c.pts;
-      for (let k = 0; k < pts.length; k += 2) {
-        right = Math.max(right, Math.ceil(pts[k] + CABLE_MARGIN));
-        bottom = Math.max(bottom, Math.ceil(pts[k + 1] + CABLE_MARGIN));
-      }
-    }
-    if (ahead) {
-      right = Math.max(right, ahead.right);
-      bottom = Math.max(bottom, ahead.bottom);
-    }
-    const apply = () => {
-      const z = this.zoom;
-      const width = Math.max(right, Math.floor(this.scroller.clientWidth / z));
-      const height = Math.max(bottom, Math.floor(this.scroller.clientHeight / z));
-      // rows a module can be dropped into, including a partly visible last one
-      this.rows = Math.max(1, Math.ceil(height / ROW));
-      this.content.style.width = `${width}px`;
-      this.content.style.height = `${height}px`;
-      // the transform does not change layout size, the sizer gives the scroll area
-      this.sizer.style.width = `${Math.round(width * z)}px`;
-      this.sizer.style.height = `${Math.round(height * z)}px`;
-    };
-    // a scrollbar appearing or going away changes the view size, so once more
-    const w = this.scroller.clientWidth;
-    const h = this.scroller.clientHeight;
-    apply();
-    if (this.scroller.clientWidth !== w || this.scroller.clientHeight !== h) apply();
+    const dx = step(r.right - e.clientX) - step(e.clientX - r.left);
+    const dy = step(r.bottom - e.clientY) - step(e.clientY - r.top);
+    if (dx || dy) this.panBy(-dx, -dy);
   }
 
   jackPos(ref, dir) {
@@ -1126,8 +1147,7 @@ export class Rack {
   startPan(e) {
     e.preventDefault();
     e.stopPropagation();
-    const { scroller } = this;
-    const start = { x: e.clientX, y: e.clientY, left: scroller.scrollLeft, top: scroller.scrollTop };
+    const start = { x: e.clientX, y: e.clientY, left: this.pan.x, top: this.pan.y };
     let moved = false;
     const move = (ev) => {
       const dx = ev.clientX - start.x;
@@ -1135,8 +1155,7 @@ export class Rack {
       if (!moved && Math.hypot(dx, dy) < 3) return;
       moved = true;
       document.body.classList.add('panning');
-      scroller.scrollLeft = start.left - dx;
-      scroller.scrollTop = start.top - dy;
+      this.setPan(start.left + dx, start.top + dy);
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
@@ -1197,7 +1216,6 @@ export class Rack {
     const fits = (dx, drow) => group.every((o) => {
       const x = origin.get(o).x + dx;
       const row = origin.get(o).row + drow;
-      if (x < 0 || row < 0) return false;
       for (const other of this.modules.values()) {
         if (origin.has(other) || other.row !== row) continue;
         if (x < other.x + other.def.cols && other.x < x + o.def.cols) return false;
@@ -1220,7 +1238,6 @@ export class Rack {
       const dx = Math.round((p.x - start.x) / CELL);
       const drow = Math.round((p.y - start.y) / ROW);
       if (fits(dx, drow)) put(dx, drow);
-      this.updateExtent({ right: p.x + 2 * CELL, bottom: p.y + ROW });
     };
     const end = (cancel) => {
       window.removeEventListener('pointermove', move);
@@ -1230,7 +1247,6 @@ export class Rack {
       this.dragging = false;
       for (const o of group) o.el.classList.remove('dragging');
       if (cancel) put(0, 0);
-      this.updateExtent();
       if (!cancel) this.onChange();
     };
     const up = () => end(false);
@@ -1261,13 +1277,12 @@ export class Rack {
     const move = (ev) => {
       this.autoScroll(ev);
       const p = this.pointer(ev);
-      const left = Math.max(0, p.x - grab.x);
-      const top = Math.max(0, p.y - grab.y);
-      const row = Math.min(this.rows - 1, Math.max(0, Math.round(top / ROW)));
+      const left = p.x - grab.x;
+      const top = p.y - grab.y;
+      const row = Math.round(top / ROW);
       this.arrange(m, Math.round(left / CELL), row, snap);
       this.setPixels(m, left, top);
       this.relayoutCables();
-      this.updateExtent({ right: left + (m.def.cols + 2) * CELL, bottom: top + 2 * ROW });
       this.drop.style.left = `${m.x * CELL}px`;
       this.drop.style.top = `${m.row * ROW}px`;
     };
@@ -1288,7 +1303,6 @@ export class Rack {
       m.el.classList.remove('dragging');
       this.place(m);
       this.relayoutCables();
-      this.updateExtent();
       if (!cancel) this.onChange();
     };
     const up = () => end(false);
