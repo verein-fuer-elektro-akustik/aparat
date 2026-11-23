@@ -307,6 +307,7 @@ label.menu-row { justify-content: space-between; gap: 1rem; }
   inset: 0;
   overflow: hidden;
   overscroll-behavior: none;
+  touch-action: none; /* the rack pans and pinches itself (Rack.touchStart) */
   /* the grid, scaled and moved with the rack (see Rack.applyView) */
   background-color: var(--background);
   background-image:

@@ -24,6 +24,8 @@ const CELL = 48;
 const CELLS = 8;
 const ROW = CELL * CELLS;
 const EDGE = 40;
+// what a finger works rather than drags the view with
+const TOUCH_CONTROLS = '.knob, .jack, button, .title, textarea, input, select, .display.pad';
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 2;
 
@@ -73,6 +75,9 @@ export class Rack {
     // where the rack's origin is in the view, in screen pixels: the view is
     // endless, it pans and zooms over the rack without bounds
     this.pan = { x: 0, y: 0 };
+    this.touches = new Map(); // pointer id -> {x, y}, fingers panning or pinching
+    this.onZoom = () => {}; // a pinch changed the zoom
+    this.touchJoined = () => {};
     this.cables = cables;
     this.send = send;
     this.onChange = onChange;
@@ -95,6 +100,12 @@ export class Rack {
     // Pan: left-drag on empty rack space, middle-drag anywhere. Capture phase,
     // so a middle-drag over a knob or jack pans instead of turning or patching.
     scroller.addEventListener('pointerdown', (e) => {
+      // touch: one finger pans (also over a panel, where it is not on a
+      // control), a second finger anywhere joins in and pinches
+      if (e.pointerType === 'touch' && (this.touches.size > 0 || !e.target.closest(TOUCH_CONTROLS))) {
+        this.touchStart(e);
+        return;
+      }
       if (e.button === 0 && this.cableAt(e)) {
         // cables are drawn over the panels, so a click on one selects it, also
         // where it crosses a module (but not over a knob, jack or button)
@@ -380,9 +391,10 @@ export class Rack {
 
   // pan
 
+  // kept exact, so many small moves (a pinch) add up; drawn on whole pixels
   setPan(x, y) {
-    this.pan.x = Math.round(x);
-    this.pan.y = Math.round(y);
+    this.pan.x = x;
+    this.pan.y = y;
     this.applyView();
   }
 
@@ -393,14 +405,15 @@ export class Rack {
   // The rack moves by a transform; the grid is the view's background, so it
   // goes on forever.
   applyView() {
-    const { x, y } = this.pan;
+    const x = Math.round(this.pan.x);
+    const y = Math.round(this.pan.y);
     const z = this.zoom;
     this.content.style.transform = `translate(${x}px, ${y}px) scale(${z})`;
     const st = this.scroller.style;
     st.setProperty('--zcell', `${CELL * z}px`);
     st.setProperty('--zrow', `${ROW * z}px`);
     st.backgroundPosition = `${x}px ${y}px`;
-    this.cables.pan = this.pan;
+    this.cables.pan = { x, y };
   }
 
   // Zoom and pan so the whole patch is in view, centred: modules and the
@@ -1166,6 +1179,79 @@ export class Rack {
       if (moved || e.button !== 0) return;
       this.select(null);
       this.cables.selected = null;
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  }
+
+  // Touch: one finger drags the view; with two, their spread zooms around
+  // the point between them and that point follows them. A tap on empty space
+  // deselects, like a click.
+  touchStart(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const { touches } = this;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size > 1) {
+      this.touchJoined(); // joins the gesture already running
+      return;
+    }
+    const empty = e.target === this.content || e.target === this.scroller;
+    const start = { x: e.clientX, y: e.clientY };
+    let moved = false;
+    let zoomed = false;
+    const two = () => {
+      const [a, b] = [...touches.values()];
+      return { mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, dist: Math.hypot(a.x - b.x, a.y - b.y) };
+    };
+    let last = { ...start }; // the previous pinch {mid, dist}, or finger position
+    // a second finger: the pinch starts from where both are now
+    this.touchJoined = () => {
+      last = two();
+    };
+    const move = (ev) => {
+      const t = touches.get(ev.pointerId);
+      if (!t) return;
+      t.x = ev.clientX;
+      t.y = ev.clientY;
+      if (touches.size >= 2) {
+        const now = two();
+        if (last.dist && now.dist > 0) {
+          this.setZoom(this.zoom * (now.dist / last.dist), last.mid.x, last.mid.y);
+          this.panBy(now.mid.x - last.mid.x, now.mid.y - last.mid.y);
+          zoomed = true;
+        }
+        last = now;
+        moved = true;
+        return;
+      }
+      if (!moved && Math.hypot(t.x - start.x, t.y - start.y) < 6) return;
+      if (!last.mid) this.panBy(t.x - last.x, t.y - last.y);
+      last = { x: t.x, y: t.y };
+      moved = true;
+    };
+    const up = (ev) => {
+      if (!touches.delete(ev.pointerId)) return;
+      // from two fingers back to one: it goes on from where it is
+      if (touches.size === 1) {
+        const [t] = touches.values();
+        last = { x: t.x, y: t.y };
+        return;
+      }
+      if (touches.size > 1) {
+        last = two();
+        return;
+      }
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      if (zoomed) this.onZoom();
+      if (moved) return;
+      // a tap selects the module it is on (its own pointerdown never came)
+      const m = empty ? null : [...this.modules.values()].find((o) => o.el.contains(e.target));
+      this.select(m ?? null);
+      if (!m) this.cables.selected = null;
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);

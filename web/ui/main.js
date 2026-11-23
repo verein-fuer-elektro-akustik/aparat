@@ -1395,6 +1395,8 @@ $('zoomIn').addEventListener('click', () => zoomTo(zoomStep(1)));
 $('zoomOut').addEventListener('click', () => zoomTo(zoomStep(-1)));
 $('zoomReset').addEventListener('click', () => zoomTo(1));
 $('showAll').addEventListener('click', () => showAll());
+// a pinch zoomed: the buttons and the remembered zoom follow
+top.onZoom = inner.onZoom = () => zoomTo(rack.zoom);
 function showAll() {
   rack.showAll();
   zoomTo(rack.zoom); // the buttons and the remembered zoom follow
