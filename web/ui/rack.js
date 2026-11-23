@@ -738,6 +738,7 @@ export class Rack {
     const label = document.createElement('div');
     label.className = 'name';
     label.append(name);
+    if (def.doc) name.title = def.doc;
     // a composite is marked with two stacked squares, which also open it
     if (def.composite) {
       const open = document.createElement('button');
