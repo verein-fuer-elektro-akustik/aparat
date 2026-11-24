@@ -364,7 +364,7 @@ body.panning, body.panning * { cursor: grabbing !important; }
 
 .module {
   position: absolute;
-  cursor: default;
+  cursor: grab; /* dragging the panel moves the view, like the background */
   display: flex;
   flex-direction: column;
   overflow: hidden;

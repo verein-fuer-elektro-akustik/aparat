@@ -835,8 +835,12 @@ export class Rack {
     // shift or ctrl adds to (or takes from) the selection; a module that is
     // part of a selection keeps it, so the group can be dragged or right-clicked
     el.addEventListener('pointerdown', (e) => {
-      if ((e.shiftKey || e.ctrlKey || e.metaKey) && !e.target.closest('.knob, .jack, button, textarea')) this.select(m, true);
+      const modifier = e.shiftKey || e.ctrlKey || e.metaKey;
+      if (modifier && !e.target.closest('.knob, .jack, button, textarea')) this.select(m, true);
       else if (!this.selection.has(m)) this.select(m);
+      // a left-drag on the panel itself, away from its controls, moves the
+      // view, as on empty space (touch is handled by touchStart)
+      if (e.button === 0 && !modifier && e.pointerType !== 'touch' && !e.target.closest(TOUCH_CONTROLS)) this.startPan(e, false);
     });
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -1157,7 +1161,8 @@ export class Rack {
 
   // gestures
 
-  startPan(e) {
+  // deselect: a click without dragging deselects (on empty space)
+  startPan(e, deselect = true) {
     e.preventDefault();
     e.stopPropagation();
     const start = { x: e.clientX, y: e.clientY, left: this.pan.x, top: this.pan.y };
@@ -1176,7 +1181,7 @@ export class Rack {
       window.removeEventListener('pointercancel', up);
       document.body.classList.remove('panning');
       // a left click on empty space without dragging deselects
-      if (moved || e.button !== 0) return;
+      if (moved || e.button !== 0 || !deselect) return;
       this.select(null);
       this.cables.selected = null;
     };
