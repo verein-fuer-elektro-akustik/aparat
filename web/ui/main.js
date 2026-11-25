@@ -20,7 +20,7 @@ import { download, guarded, showError, showInfo, stamp } from './toast.js';
 const $ = (id) => document.getElementById(id);
 
 const audio = new AudioEngine(onEngineMessage);
-const cables = new CableLayer($('cables'), $('rack'));
+const cables = new CableLayer($('cables'));
 
 // The camera runs while audio does and a camera module is in the patch (also
 // inside a composite). Each frame goes to the engine and to the panels.
@@ -86,7 +86,7 @@ const top = new Rack({
   onOpen: (m) => openComposite(m),
 });
 let rack = top;
-const innerCables = new CableLayer($('innerCables'), $('innerRack'));
+const innerCables = new CableLayer($('innerCables'));
 innerCables.setPeaks(new Float32Array(0));
 const inner = new Rack({
   scroller: $('innerRack'),
@@ -842,7 +842,7 @@ window.addEventListener('drop', guarded(async (e) => {
   e.preventDefault();
   if (isPatchFile(file)) return importPatch(file);
   const cell = rack.cellAt(e.clientX, e.clientY);
-  if ((e.target === $('content') || e.target === $('rack')) && cell) loadSample(rack.insert('sampler', cell), file);
+  if (e.target === rack.scroller && cell) loadSample(rack.insert('sampler', cell), file);
 }));
 
 function usesInput() {
@@ -1383,9 +1383,7 @@ const zoomStep = (dir) =>
 
 function zoomTo(z, clientX, clientY) {
   rack.setZoom(z, clientX, clientY);
-  $('zoomLevel').textContent = `${Math.round(rack.zoom * 100)}%`;
-  $('zoomOut').disabled = rack.zoom <= ZOOM_MIN;
-  $('zoomIn').disabled = rack.zoom >= ZOOM_MAX;
+  zoomShown();
   try {
     localStorage.setItem('aparat.zoom', String(rack.zoom));
   } catch {}

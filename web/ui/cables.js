@@ -54,9 +54,8 @@ function curve(x0, y0, x1, y1) {
 }
 
 export class CableLayer {
-  constructor(canvas, scroller) {
+  constructor(canvas) {
     this.canvas = canvas;
-    this.scroller = scroller;
     this.ctx = canvas.getContext('2d');
     this.list = [];
     this.bySlot = [];

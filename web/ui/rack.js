@@ -3,10 +3,6 @@ import { makeKnob } from './knob.js';
 import { colours } from './theme.js';
 import { defFinder, dependents, flatten, usedComposites } from './composite.js';
 
-// The rack is a grid of square cells. A module is CELLS cells tall, so the
-// rack is made of rows CELLS cells high. A module is as many cells wide as it
-// has columns of knobs and jacks (def.cols). Keep in sync with --cell in style.css.
-// a key's name as printed on it, from its code (KeyQ, Digit1, Space)
 // a colour from the theme (#rrggbb or rgb()) as [r, g, b]
 function rgb(c) {
   const hex = /^#([0-9a-f]{6})$/i.exec(c ?? '');
@@ -18,8 +14,12 @@ function rgb(c) {
 // what a jack's kind (def.kinds) means, shown on hover
 const KINDS = { gate: 'gate or trigger, 10 V', pitch: 'pitch, 1 V/oct' };
 
+// a key's name as printed on it, from its code (KeyQ, Digit1, Space)
 export const keyName = (code) => code.replace(/^(Key|Digit|Numpad|Arrow)/, '').toLowerCase();
 
+// The rack is a grid of square cells. A module is CELLS cells tall, so the
+// rack is made of rows CELLS cells high. A module is as many cells wide as it
+// has columns of knobs and jacks (def.cols). Keep in sync with --cell in style.css.
 const CELL = 48;
 const CELLS = 8;
 const ROW = CELL * CELLS;
@@ -100,6 +100,10 @@ export class Rack {
     // Pan: left-drag on empty rack space, middle-drag anywhere. Capture phase,
     // so a middle-drag over a knob or jack pans instead of turning or patching.
     scroller.addEventListener('pointerdown', (e) => {
+      // the gestures below prevent the default, which would also have moved
+      // the keyboard away from a note or field being typed in
+      const focused = document.activeElement;
+      if (focused !== e.target && focused?.matches('textarea, input, select')) focused.blur();
       // touch: one finger pans (also over a panel, where it is not on a
       // control), a second finger anywhere joins in and pinches
       if (e.pointerType === 'touch' && (this.touches.size > 0 || !e.target.closest(TOUCH_CONTROLS))) {
@@ -228,8 +232,7 @@ export class Rack {
       (c) => c.from.m === from.m && c.from.i === from.i && c.to.m === to.m && c.to.i === to.i,
     );
     if (exists) return null;
-    const slot = this.freeSlots.length ? this.freeSlots.pop() : this.nextSlot++;
-    const cable = { slot, from, to };
+    const cable = { slot: this.slot(), from, to };
     this.cables.add(cable);
     this.layoutCable(cable);
     this.sendConnect(cable);
@@ -341,12 +344,8 @@ export class Rack {
     }
     this.unoverlap();
     for (const c of data.cables ?? []) {
-      const a = made.get(c.from[0]);
-      const b = made.get(c.to[0]);
-      if (!a || !b) continue;
-      const i = a.def.outputs.indexOf(c.from[1]);
-      const j = Object.keys(b.def.inputs).indexOf(c.to[1]);
-      if (i >= 0 && j >= 0) this.connect({ m: a, i }, { m: b, i: j });
+      const ends = this.cableEnds(c, (id) => made.get(id));
+      if (ends) this.connect(...ends);
     }
     const mods = [...made.values()];
     this.select(null);
@@ -360,7 +359,7 @@ export class Rack {
     for (const m of this.modules.values()) this.select(m, true);
   }
 
-  // The grid cell under a point on screen, or null outside the rack.
+  // The grid cell under a point on screen, or null outside the view.
   cellAt(clientX, clientY) {
     const view = this.scroller.getBoundingClientRect();
     if (clientX < view.left || clientX > view.right || clientY < view.top || clientY > view.bottom) return null;
@@ -574,6 +573,16 @@ export class Rack {
     };
   }
 
+  // A cable of a patch file ({from: [id, output], to: [id, input]}) as the
+  // jacks it joins, with get(id) finding the modules; null if one is missing.
+  cableEnds(c, get) {
+    const a = get(c.from[0]);
+    const b = get(c.to[0]);
+    const i = a ? a.def.outputs.indexOf(c.from[1]) : -1;
+    const j = b ? Object.keys(b.def.inputs).indexOf(c.to[1]) : -1;
+    return i >= 0 && j >= 0 ? [{ m: a, i }, { m: b, i: j }] : null;
+  }
+
   setComposites(composites) {
     this.composites = { ...composites };
     const find = defFinder(registry, this.composites);
@@ -590,12 +599,8 @@ export class Rack {
     }
     this.unoverlap();
     for (const c of patch.cables ?? []) {
-      const a = this.modules.get(c.from[0]);
-      const b = this.modules.get(c.to[0]);
-      if (!a || !b) continue;
-      const i = a.def.outputs.indexOf(c.from[1]);
-      const j = Object.keys(b.def.inputs).indexOf(c.to[1]);
-      if (i >= 0 && j >= 0) this.connect({ m: a, i }, { m: b, i: j });
+      const ends = this.cableEnds(c, (id) => this.modules.get(id));
+      if (ends) this.connect(...ends);
     }
     this.midiMap = (patch.midiMap ?? []).filter((e) => this.modules.has(e.id));
     for (const e of this.midiMap) this.knobFor(e)?.el.classList.add('mapped');
@@ -650,12 +655,8 @@ export class Rack {
     const key = (a, i, b, j) => `${a}:${i}>${b}:${j}`;
     const wanted = new Map();
     for (const c of patch.cables ?? []) {
-      const a = this.modules.get(c.from[0]);
-      const b = this.modules.get(c.to[0]);
-      if (!a || !b) continue;
-      const i = a.def.outputs.indexOf(c.from[1]);
-      const j = Object.keys(b.def.inputs).indexOf(c.to[1]);
-      if (i >= 0 && j >= 0) wanted.set(key(a.id, i, b.id, j), [{ m: a, i }, { m: b, i: j }]);
+      const ends = this.cableEnds(c, (id) => this.modules.get(id));
+      if (ends) wanted.set(key(ends[0].m.id, ends[0].i, ends[1].m.id, ends[1].i), ends);
     }
     for (const c of [...this.cables.list]) {
       const k = key(c.from.m.id, c.from.i, c.to.m.id, c.to.i);
@@ -1253,7 +1254,10 @@ export class Rack {
       window.removeEventListener('pointercancel', up);
       if (zoomed) this.onZoom();
       if (moved) return;
-      // a tap selects the module it is on (its own pointerdown never came)
+      // a tap selects the cable or module it is on (their own pointerdown
+      // never came)
+      const cable = this.cableAt(e);
+      if (cable) return this.selectCable(cable);
       const m = empty ? null : [...this.modules.values()].find((o) => o.el.contains(e.target));
       this.select(m ?? null);
       if (!m) this.cables.selected = null;
