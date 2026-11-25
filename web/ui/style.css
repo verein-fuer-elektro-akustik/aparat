@@ -537,6 +537,8 @@ body.panning, body.panning * { cursor: grabbing !important; }
   cursor: crosshair;
   touch-action: none;
 }
+/* a coloured cable colours the ring of its jack (cables.js) */
+.jack[style*="--plug"] { border-color: var(--plug); }
 .jack:hover { border-color: var(--f-high); }
 .outputs .jack { background: var(--f-low); }
 

@@ -46,6 +46,10 @@
   --tint: #ffffff0d;
   --cable-base: 128, 128, 128;
   --cable-signal: 200, 200, 200;
+  --cable-gate: 230, 150, 50;
+  --cable-pitch: 70, 150, 230;
+  --cable-edge: 0, 0, 0, 0.55;
+  --cable-shadow: 0, 0, 0, 0.35;
   --halo: 0, 0, 0;
   color-scheme: dark;
 }
@@ -72,6 +76,10 @@
     --tint: #0000000d;
     --cable-base: 120, 120, 120;
     --cable-signal: 40, 40, 40;
+    --cable-gate: 215, 120, 20;
+    --cable-pitch: 30, 110, 210;
+    --cable-edge: 0, 0, 0, 0.18;
+    --cable-shadow: 0, 0, 0, 0.08;
     --halo: 255, 255, 255;
     color-scheme: light;
   }
@@ -90,6 +98,10 @@
   --tint: #0000000d;
   --cable-base: 120, 120, 120;
   --cable-signal: 40, 40, 40;
+  --cable-gate: 215, 120, 20;
+  --cable-pitch: 30, 110, 210;
+  --cable-edge: 0, 0, 0, 0.18;
+  --cable-shadow: 0, 0, 0, 0.08;
   --halo: 255, 255, 255;
   color-scheme: light;
 }

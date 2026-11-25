@@ -31,6 +31,10 @@ const TOUCH_CONTROLS = '.knob, .jack, button, .title, textarea, input, select, .
 const THROW_TIME = 80;
 const THROW_MAX = 2.5;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+// the wheel moves the view smoothly, catching up with this time constant (ms)
+const SCROLL_TIME = 60;
+// modules slide to a new place with this time constant (ms)
+const MOVE_TIME = 45;
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 2;
 
@@ -103,6 +107,9 @@ export class Rack {
     this.pan = { x: 0, y: 0 };
     this.touches = new Map(); // pointer id -> {x, y}, fingers panning or pinching
     this.throwing = 0; // the frame of a thrown view coasting on
+    this.scrolling = 0; // the frame of a smooth wheel scroll
+    this.scrollLeft = { x: 0, y: 0 }; // how far it still goes
+    this.sliding = new Set(); // modules on their way to a new place
     this.onZoom = () => {}; // a pinch changed the zoom
     this.touchJoined = () => {};
     this.cables = cables;
@@ -127,9 +134,11 @@ export class Rack {
     // Pan: left-drag on empty rack space, middle-drag anywhere. Capture phase,
     // so a middle-drag over a knob or jack pans instead of turning or patching.
     scroller.addEventListener('pointerdown', (e) => {
+      // a press stops the view where it is
+      this.stopThrow();
+      this.stopScroll();
       // the gestures below prevent the default, which would also have moved
       // the keyboard away from a note or field being typed in
-      this.stopThrow();
       const focused = document.activeElement;
       if (focused !== e.target && focused?.matches('textarea, input, select')) focused.blur();
       // touch: one finger pans (also over a panel, where it is not on a
@@ -153,7 +162,6 @@ export class Rack {
     // the wheel pans (shift: sideways); ctrl+wheel zooms (main.js), and a
     // knob under the pointer takes the wheel itself
     scroller.addEventListener('wheel', (e) => {
-      this.stopThrow();
       if (e.ctrlKey || e.metaKey || e.defaultPrevented) return;
       const area = e.target.closest('textarea');
       if (area && area.scrollHeight > area.clientHeight) return;
@@ -162,7 +170,7 @@ export class Rack {
       let dx = e.deltaX * unit;
       let dy = e.deltaY * unit;
       if (e.shiftKey && !dx) [dx, dy] = [dy, 0];
-      this.panBy(-dx, -dy);
+      this.scrollBy(-dx, -dy);
     }, { passive: false });
     // stop the browser's middle-click autoscroll
     scroller.addEventListener('mousedown', (e) => {
@@ -422,6 +430,7 @@ export class Rack {
   // kept exact, so many small moves (a pinch) add up; drawn on whole pixels
   setPan(x, y) {
     this.stopThrow();
+    this.stopScroll();
     this.pan.x = x;
     this.pan.y = y;
     this.applyView();
@@ -429,6 +438,39 @@ export class Rack {
 
   panBy(dx, dy) {
     this.setPan(this.pan.x + dx, this.pan.y + dy);
+  }
+
+  // The wheel: the view glides the distance instead of jumping. More turns
+  // while it glides add to the way left.
+  scrollBy(dx, dy) {
+    if (reducedMotion.matches) return this.panBy(dx, dy);
+    this.stopThrow();
+    this.scrollLeft.x += dx;
+    this.scrollLeft.y += dy;
+    if (this.scrolling) return;
+    let last = performance.now();
+    const step = (now) => {
+      const k = 1 - Math.exp(-Math.min(32, now - last) / SCROLL_TIME);
+      last = now;
+      const left = this.scrollLeft;
+      const done = Math.abs(left.x) < 0.5 && Math.abs(left.y) < 0.5;
+      const mx = done ? left.x : left.x * k;
+      const my = done ? left.y : left.y * k;
+      left.x -= mx;
+      left.y -= my;
+      this.pan.x += mx;
+      this.pan.y += my;
+      this.applyView();
+      this.scrolling = done ? 0 : requestAnimationFrame(step);
+    };
+    this.scrolling = requestAnimationFrame(step);
+  }
+
+  stopScroll() {
+    cancelAnimationFrame(this.scrolling);
+    this.scrolling = 0;
+    this.scrollLeft.x = 0;
+    this.scrollLeft.y = 0;
   }
 
   // A drag let go at speed v (px/ms): the view coasts a little further and
@@ -473,6 +515,7 @@ export class Rack {
     st.setProperty('--zrow', `${ROW * z}px`);
     st.backgroundPosition = `${x}px ${y}px`;
     this.cables.pan = { x, y };
+    this.cables.redraw();
   }
 
   // Zoom and pan so the whole patch is in view, centred: modules and the
@@ -696,7 +739,7 @@ export class Rack {
       }
       m.x = p.x;
       m.row = p.row;
-      this.place(m);
+      this.place(m, true);
       if ((p.color ?? null) !== m.color) this.paintColour(m, p.color);
       if (JSON.stringify(m.data) !== JSON.stringify(p.data ?? null)) {
         m.data = p.data ?? null;
@@ -1058,15 +1101,54 @@ export class Rack {
     }
   }
 
-  place(m) {
-    this.setPixels(m, m.x * CELL, m.row * ROW);
+  // animate: slide there, else jump
+  place(m, animate = false) {
+    this.setPixels(m, m.x * CELL, m.row * ROW, animate);
   }
 
-  setPixels(m, left, top) {
+  // m.left and m.top are where the module is; m.shownX and m.shownY where
+  // its panel is drawn, which differ while it slides there. Cables follow
+  // the panel.
+  setPixels(m, left, top, animate = false) {
     m.left = left;
     m.top = top;
-    m.el.style.left = `${left}px`;
-    m.el.style.top = `${top}px`;
+    if (animate && !reducedMotion.matches && m.shownX !== undefined) {
+      if (m.shownX === left && m.shownY === top) return;
+      this.sliding.add(m);
+      this.slideFrame ||= requestAnimationFrame((now) => this.slide(now, now));
+      return;
+    }
+    this.sliding.delete(m);
+    this.showAt(m, left, top);
+  }
+
+  showAt(m, x, y) {
+    m.shownX = x;
+    m.shownY = y;
+    m.el.style.left = `${x}px`;
+    m.el.style.top = `${y}px`;
+  }
+
+  // one step of the sliding modules towards their places
+  slide(now, last) {
+    const k = 1 - Math.exp(-Math.min(32, now - last) / MOVE_TIME);
+    for (const m of this.sliding) {
+      if (!this.live(m)) {
+        this.sliding.delete(m);
+        continue;
+      }
+      let x = m.shownX + (m.left - m.shownX) * k;
+      let y = m.shownY + (m.top - m.shownY) * k;
+      if (Math.abs(m.left - x) < 0.5 && Math.abs(m.top - y) < 0.5) {
+        x = m.left;
+        y = m.top;
+        this.sliding.delete(m);
+      }
+      this.showAt(m, x, y);
+    }
+    this.relayoutCables();
+    this.cables.redraw(); // in step with the panels, not a frame behind
+    this.slideFrame = this.sliding.size ? requestAnimationFrame((t) => this.slide(t, now)) : 0;
   }
 
   // Selected are modules or one cable (delete removes them). select(m) selects
@@ -1191,7 +1273,7 @@ export class Rack {
     }
     m.x = x;
     m.row = row;
-    for (const o of snap.keys()) if (o !== m) this.place(o);
+    for (const o of snap.keys()) if (o !== m) this.place(o, true);
   }
 
   relayoutCables() {
@@ -1208,7 +1290,7 @@ export class Rack {
 
   jackPos(ref, dir) {
     const j = ref.m.jacks[dir][ref.i];
-    return { x: ref.m.left + j.x, y: ref.m.top + j.y };
+    return { x: ref.m.shownX + j.x, y: ref.m.shownY + j.y };
   }
 
   layoutCable(c) {
@@ -1389,7 +1471,7 @@ export class Rack {
       for (const o of group) {
         o.x = origin.get(o).x + dx;
         o.row = origin.get(o).row + drow;
-        this.place(o);
+        this.place(o, true);
       }
       this.relayoutCables();
     };
@@ -1459,12 +1541,12 @@ export class Rack {
         for (const [o, s] of snap) {
           o.x = s.x;
           o.row = s.row;
-          this.place(o);
+          this.place(o, true);
         }
       }
       this.drop.hidden = true;
       m.el.classList.remove('dragging');
-      this.place(m);
+      this.place(m, true);
       this.relayoutCables();
       if (!cancel) this.onChange();
     };
