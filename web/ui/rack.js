@@ -26,8 +26,34 @@ const ROW = CELL * CELLS;
 const EDGE = 40;
 // what a finger works rather than drags the view with
 const TOUCH_CONTROLS = '.knob, .jack, button, .title, textarea, input, select, .display.pad';
+// a view let go while dragging coasts on, slowing down with this time
+// constant (ms), at most this fast (px/ms)
+const THROW_TIME = 80;
+const THROW_MAX = 2.5;
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 2;
+
+// Where a dragging pointer was in the last 100 ms, for the speed (px/ms) it
+// is let go with: none if it rested before letting go.
+function tracker() {
+  const pts = [];
+  return {
+    add(e) {
+      pts.push({ x: e.clientX, y: e.clientY, t: e.timeStamp });
+      while (pts.length > 2 && e.timeStamp - pts[0].t > 100) pts.shift();
+    },
+    clear() {
+      pts.length = 0;
+    },
+    speed(e) {
+      const a = pts[0];
+      const b = pts.at(-1);
+      if (!b || e.timeStamp - b.t > 50 || b.t <= a.t) return { x: 0, y: 0 };
+      return { x: (b.x - a.x) / (b.t - a.t), y: (b.y - a.y) / (b.t - a.t) };
+    },
+  };
+}
 
 function div(className, parent) {
   const el = document.createElement('div');
@@ -76,6 +102,7 @@ export class Rack {
     // endless, it pans and zooms over the rack without bounds
     this.pan = { x: 0, y: 0 };
     this.touches = new Map(); // pointer id -> {x, y}, fingers panning or pinching
+    this.throwing = 0; // the frame of a thrown view coasting on
     this.onZoom = () => {}; // a pinch changed the zoom
     this.touchJoined = () => {};
     this.cables = cables;
@@ -102,6 +129,7 @@ export class Rack {
     scroller.addEventListener('pointerdown', (e) => {
       // the gestures below prevent the default, which would also have moved
       // the keyboard away from a note or field being typed in
+      this.stopThrow();
       const focused = document.activeElement;
       if (focused !== e.target && focused?.matches('textarea, input, select')) focused.blur();
       // touch: one finger pans (also over a panel, where it is not on a
@@ -125,6 +153,7 @@ export class Rack {
     // the wheel pans (shift: sideways); ctrl+wheel zooms (main.js), and a
     // knob under the pointer takes the wheel itself
     scroller.addEventListener('wheel', (e) => {
+      this.stopThrow();
       if (e.ctrlKey || e.metaKey || e.defaultPrevented) return;
       const area = e.target.closest('textarea');
       if (area && area.scrollHeight > area.clientHeight) return;
@@ -392,6 +421,7 @@ export class Rack {
 
   // kept exact, so many small moves (a pinch) add up; drawn on whole pixels
   setPan(x, y) {
+    this.stopThrow();
     this.pan.x = x;
     this.pan.y = y;
     this.applyView();
@@ -399,6 +429,36 @@ export class Rack {
 
   panBy(dx, dy) {
     this.setPan(this.pan.x + dx, this.pan.y + dy);
+  }
+
+  // A drag let go at speed v (px/ms): the view coasts a little further and
+  // comes to rest. Anything else that moves the view stops it.
+  throwView(v) {
+    this.stopThrow();
+    const speed = Math.hypot(v.x, v.y);
+    if (speed < 0.3 || reducedMotion.matches) return;
+    const k = Math.min(1, THROW_MAX / speed);
+    let vx = v.x * k;
+    let vy = v.y * k;
+    let last = performance.now();
+    const step = (now) => {
+      const dt = Math.min(32, now - last);
+      last = now;
+      this.pan.x += vx * dt;
+      this.pan.y += vy * dt;
+      this.applyView();
+      const decay = Math.exp(-dt / THROW_TIME);
+      vx *= decay;
+      vy *= decay;
+      this.throwing = Math.hypot(vx, vy) > 0.02 ? requestAnimationFrame(step) : 0;
+    };
+    this.throwing = requestAnimationFrame(step);
+  }
+
+  stopThrow() {
+    if (!this.throwing) return;
+    cancelAnimationFrame(this.throwing);
+    this.throwing = 0;
   }
 
   // The rack moves by a transform; the grid is the view's background, so it
@@ -1168,19 +1228,22 @@ export class Rack {
     e.stopPropagation();
     const start = { x: e.clientX, y: e.clientY, left: this.pan.x, top: this.pan.y };
     let moved = false;
+    const track = tracker();
     const move = (ev) => {
       const dx = ev.clientX - start.x;
       const dy = ev.clientY - start.y;
+      track.add(ev);
       if (!moved && Math.hypot(dx, dy) < 3) return;
       moved = true;
       document.body.classList.add('panning');
       this.setPan(start.left + dx, start.top + dy);
     };
-    const up = () => {
+    const up = (ev) => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
       document.body.classList.remove('panning');
+      if (moved && ev.type === 'pointerup') this.throwView(track.speed(ev));
       // a left click on empty space without dragging deselects
       if (moved || e.button !== 0 || !deselect) return;
       this.select(null);
@@ -1212,9 +1275,11 @@ export class Rack {
       return { mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, dist: Math.hypot(a.x - b.x, a.y - b.y) };
     };
     let last = { ...start }; // the previous pinch {mid, dist}, or finger position
+    const track = tracker(); // the one finger, for its speed when let go
     // a second finger: the pinch starts from where both are now
     this.touchJoined = () => {
       last = two();
+      track.clear();
     };
     const move = (ev) => {
       const t = touches.get(ev.pointerId);
@@ -1232,6 +1297,7 @@ export class Rack {
         moved = true;
         return;
       }
+      track.add(ev);
       if (!moved && Math.hypot(t.x - start.x, t.y - start.y) < 6) return;
       if (!last.mid) this.panBy(t.x - last.x, t.y - last.y);
       last = { x: t.x, y: t.y };
@@ -1253,6 +1319,8 @@ export class Rack {
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
       if (zoomed) this.onZoom();
+      // a one-finger drag is thrown, a pinch is not
+      if (moved && !zoomed && ev.type === 'pointerup') this.throwView(track.speed(ev));
       if (moved) return;
       // a tap selects the cable or module it is on (their own pointerdown
       // never came)
