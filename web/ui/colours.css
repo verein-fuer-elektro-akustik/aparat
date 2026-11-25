@@ -1,9 +1,24 @@
 /* Fonts and colours, shared by the app (style.css) and the help page
    (help.css). */
 
-/* JetBrains Mono ships with the app (fonts/, SIL Open Font License) and is
-   only loaded from there, never taken from a locally installed copy, so
-   values look the same everywhere. */
+/* Inter (text) and JetBrains Mono (values) ship with the app (fonts/, SIL
+   Open Font License) and are only loaded from there, never taken from a
+   locally installed copy, so they look the same everywhere. Inter comes in
+   the two weights used, 400 and 600. */
+@font-face {
+  font-family: "Inter";
+  src: url("../fonts/Inter-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("../fonts/Inter-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
 @font-face {
   font-family: "JetBrains Mono";
   src: url("../fonts/JetBrainsMono-Regular.woff2") format("woff2");
