@@ -19,7 +19,7 @@ export default {
     // stepped, so the engine sets it at once and the gate is not late
     press: { min: 0, max: 1, default: 0, step: 0.001, momentary: true, format: unit },
     glide: { min: 0, max: 2, default: 0, format: (v) => (v < 1 ? `${Math.round(v * 1000)} ms` : `${v.toFixed(2)} s`) },
-    bipolar: { min: 0, max: 1, default: 0, step: 1, format: (v) => (v ? '±5 v' : '0-10 v') },
+    bipolar: { min: 0, max: 1, default: 0, step: 1, label: '±5 v', format: (v) => (v ? '±5 v' : '0-10 v') },
   },
   pad: ['x', 'y', 'press'],
   displayHeight: 179,

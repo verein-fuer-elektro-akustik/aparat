@@ -24,9 +24,18 @@ export function formatValue(def, v) {
 // One with fader: true is a vertical fader, which works like a knob except
 // that a drag moves its cap with the pointer. A toggle has its name (or
 // def.label) written on it and is filled while on, so it shows no value.
+//
+// Knobs and faders can be limited to part of their travel, [lo, hi] from 0
+// to 1 along it, so it works the same on exponential and stepped knobs.
+// ctrl+drag (cmd on a Mac) on the knob moves a limit: on a knob the left half
+// moves the lowest point and the right half the highest, on a fader above or
+// below the middle of the range; ctrl+double-click takes that limit away.
+// Marks on the ring or beside the track show the limits on hover. Turning, the wheel,
+// keys, reset, random and midi all stay inside; a midi controller spreads its
+// whole travel across the range. onRange gets [lo, hi], or null for none.
 const isToggle = (def) => def.min === 0 && def.max === 1 && def.step === 1;
 
-export function makeKnob({ name, def, value, onChange, onLearn }) {
+export function makeKnob({ name, def, value, range, onChange, onLearn, onRange }) {
   const toggle = isToggle(def);
   const el = document.createElement('div');
   const text = toggle && (def.label ?? name);
@@ -44,11 +53,22 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
   dial.className = 'dial';
   const label = document.createElement('span');
   label.textContent = toggle ? text : name;
-  el.append(dial, label);
+  // the dial with what is drawn around it: the limited arc and the handles
+  const face = document.createElement('div');
+  face.className = 'face';
+  face.append(dial);
+  el.append(face, label);
 
   let current = value;
   let norm = toNorm(def, value);
   let showing = false;
+  let [lo, hi] = range ?? [0, 1];
+  const handles = toggle ? null : { lo: makeHandle('lo'), hi: makeHandle('hi') };
+  if (handles) {
+    const arc = document.createElement('div');
+    arc.className = 'arc';
+    face.append(arc, handles.lo, handles.hi);
+  }
 
   function render() {
     if (toggle) {
@@ -64,6 +84,17 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
     if (showing) label.textContent = formatValue(def, current);
   }
 
+  function renderRange() {
+    if (!handles) return;
+    el.classList.toggle('limited', lo > 0 || hi < 1);
+    el.style.setProperty('--lo', lo);
+    el.style.setProperty('--hi', hi);
+    handles.lo.style.setProperty('--at', lo);
+    handles.hi.style.setProperty('--at', hi);
+    el.setAttribute('aria-valuemin', String(lo));
+    el.setAttribute('aria-valuemax', String(hi));
+  }
+
   function show(on) {
     showing = on;
     el.classList.toggle('active', on);
@@ -71,7 +102,7 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
   }
 
   function setNorm(n) {
-    norm = clamp01(n);
+    norm = Math.min(hi, Math.max(lo, n));
     const next = fromNorm(def, norm);
     if (next !== current) {
       current = next;
@@ -86,6 +117,65 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
     render();
   }
 
+  // how far the pointer moves for the whole travel: a fader's cap (and its
+  // handles) follow the pointer along the track, on screen, so zoomed
+  function dragRange() {
+    if (!def.fader) return DRAG_RANGE;
+    const shown = dial.getBoundingClientRect().height;
+    return Math.max(1, shown - FADER_CAP * (shown / dial.offsetHeight || 1));
+  }
+
+  // pointer drags, shift for fine; calls step(delta) with the travel moved
+  function drag(e, target, step, done) {
+    target.setPointerCapture(e.pointerId);
+    dragging = true;
+    let lastY = e.clientY;
+    const range = dragRange();
+    const move = (ev) => {
+      step(((lastY - ev.clientY) / range) * (ev.shiftKey ? 0.1 : 1));
+      lastY = ev.clientY;
+    };
+    const up = () => {
+      dragging = false;
+      target.removeEventListener('pointermove', move);
+      target.removeEventListener('pointerup', up);
+      target.removeEventListener('pointercancel', up);
+      done?.();
+    };
+    target.addEventListener('pointermove', move);
+    target.addEventListener('pointerup', up);
+    target.addEventListener('pointercancel', up);
+  }
+
+  function setLimit(which, n) {
+    n = Math.round(clamp01(n) * 1e4) / 1e4;
+    if (which === 'lo') lo = Math.min(hi, n);
+    else hi = Math.max(lo, n);
+    renderRange();
+    label.textContent = formatValue(def, fromNorm(def, which === 'lo' ? lo : hi));
+    onRange?.(lo > 0 || hi < 1 ? [lo, hi] : null);
+    // the value moves along when a limit passes it
+    if (norm < lo || norm > hi) setNorm(norm);
+  }
+
+  // a mark showing one end of the travel
+  function makeHandle(which) {
+    const h = document.createElement('div');
+    h.className = `limit ${which}`;
+    return h;
+  }
+
+  // which limit a ctrl+drag or ctrl+double-click at the pointer moves
+  function limitAt(e) {
+    const r = dial.getBoundingClientRect();
+    if (!def.fader) return e.clientX < r.left + r.width / 2 ? 'lo' : 'hi';
+    const cap = FADER_CAP * (r.height / dial.offsetHeight || 1);
+    const middle = r.bottom - cap / 2 - ((lo + hi) / 2) * (r.height - cap);
+    return e.clientY < middle ? 'hi' : 'lo';
+  }
+
+  const limiting = (e) => (e.ctrlKey || e.metaKey) && handles;
+
   let dragging = false;
   el.addEventListener('pointerenter', () => show(true));
   el.addEventListener('pointerleave', () => {
@@ -98,6 +188,16 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
     if (e.button !== 0) return;
     e.preventDefault();
     el.focus({ focusVisible: false });
+    if (limiting(e)) {
+      const which = limitAt(e);
+      el.classList.add('limiting');
+      label.textContent = formatValue(def, fromNorm(def, which === 'lo' ? lo : hi));
+      drag(e, el, (d) => setLimit(which, (which === 'lo' ? lo : hi) + d), () => {
+        el.classList.remove('limiting');
+        show(el.matches(':hover') || document.activeElement === el);
+      });
+      return;
+    }
     if (def.momentary) {
       // on while held, wherever the pointer goes
       el.setPointerCapture(e.pointerId);
@@ -115,29 +215,7 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
       setNorm(current === 1 ? 0 : 1);
       return;
     }
-    el.setPointerCapture(e.pointerId);
-    dragging = true;
-    let lastY = e.clientY;
-    // a fader's cap follows the pointer along its track (on screen, so zoomed)
-    let range = DRAG_RANGE;
-    if (def.fader) {
-      const shown = dial.getBoundingClientRect().height;
-      range = Math.max(1, shown - FADER_CAP * (shown / dial.offsetHeight || 1));
-    }
-    const move = (ev) => {
-      const scale = ev.shiftKey ? 0.1 : 1;
-      setNorm(norm + ((lastY - ev.clientY) / range) * scale);
-      lastY = ev.clientY;
-    };
-    const up = () => {
-      dragging = false;
-      el.removeEventListener('pointermove', move);
-      el.removeEventListener('pointerup', up);
-      el.removeEventListener('pointercancel', up);
-    };
-    el.addEventListener('pointermove', move);
-    el.addEventListener('pointerup', up);
-    el.addEventListener('pointercancel', up);
+    drag(e, el, (d) => setNorm(norm + d));
   });
 
   // The wheel turns the knob under the pointer: about 50 notches for the whole
@@ -168,8 +246,9 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
     if (def.momentary && (e.key === ' ' || e.key === 'Enter')) setNorm(0);
   });
 
-  el.addEventListener('dblclick', () => {
-    if (!toggle) setNorm(toNorm(def, def.default));
+  el.addEventListener('dblclick', (e) => {
+    if (limiting(e)) setLimit(limitAt(e), limitAt(e) === 'lo' ? 0 : 1);
+    else if (!toggle) setNorm(toNorm(def, def.default));
   });
 
   el.addEventListener('keydown', (e) => {
@@ -196,12 +275,20 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
   });
 
   render();
+  renderRange();
   return {
     el,
     setValue,
     setNorm,
-    // from a midi controller: an inverted button is lit at the top
-    setControl: (n) => setNorm(def.inverted ? 1 - n : n),
+    // from a midi controller, across the range; an inverted button is lit
+    // at the top
+    setControl: (n) => setNorm(lo + (def.inverted ? 1 - n : n) * (hi - lo)),
     reset: () => setNorm(toNorm(def, def.default)),
+    randomize: () => setNorm(lo + Math.random() * (hi - lo)),
+    // from the patch (undo): the value is set on its own
+    setRange: (r) => {
+      [lo, hi] = r ?? [0, 1];
+      renderRange();
+    },
   };
 }

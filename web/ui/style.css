@@ -521,12 +521,13 @@ body.panning, body.panning * { cursor: grabbing !important; }
 
 /* a vertical fader: a track with a cap, taking the height its strip leaves */
 .knob.fader { flex: 1; height: auto; min-height: 0; justify-content: flex-start; padding-top: 8px; }
-.knob.fader .dial { flex: 1; width: 6px; height: auto; border-radius: 3px; }
+.knob.fader .face { flex: 1; display: flex; justify-content: center; width: 100%; min-height: 0; }
+.knob.fader .dial { width: 6px; height: auto; border-radius: 3px; }
 .knob.fader .dial::after {
   left: 50%;
   top: auto;
   bottom: calc(var(--pos, 0) * (100% - 10px));
-  width: 26px;
+  width: 20px;
   height: 10px; /* FADER_CAP in knob.js */
   box-sizing: border-box;
   transform: translateX(-50%);
@@ -535,6 +536,73 @@ body.panning, body.panning * { cursor: grabbing !important; }
   background: linear-gradient(var(--f-high), var(--f-high)) center / 100% 2px no-repeat, var(--panel-out);
 }
 .knob.fader:hover .dial::after { border-color: var(--f-high); }
+/* Limits (knob.js, set with ctrl+drag): the dial with its arc and marks
+   sits in .face. The marks show on hover; a limited knob always shows the
+   range it keeps to, as an arc on the ring or a stretch of the fader's
+   track. */
+.face { position: relative; flex: none; display: flex; }
+.arc { display: none; }
+.knob.limited:not(.fader) .arc {
+  display: block;
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(from -135deg, transparent 0 calc(var(--lo) * 270deg), var(--f-high) 0 calc(var(--hi) * 270deg), transparent 0);
+  -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  mask: radial-gradient(closest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+}
+.knob.fader.limited .dial::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: calc(var(--lo) * (100% - 10px) + 4px);
+  top: calc((1 - var(--hi)) * (100% - 10px) + 4px);
+  border-radius: 3px;
+  background: var(--f-low);
+}
+/* a mark at a limit */
+.limit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px;
+  pointer-events: none;
+  opacity: 0;
+  transform: rotate(calc(var(--at) * 270deg - 135deg)) translateY(-14px);
+}
+.limit::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 2px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--f-med);
+}
+.knob:hover .limit, .knob:focus-visible .limit, .knob.limiting .limit { opacity: 1; }
+.knob.limiting .limit::after { background: var(--f-high); }
+/* a fader's marks are small triangles right of the track */
+.knob.fader .limit {
+  left: calc(50% + 11px);
+  top: auto;
+  bottom: calc(var(--at) * (100% - 10px));
+  margin: 0;
+  transform: none;
+}
+.knob.fader .limit::after {
+  left: 1px;
+  top: 1px;
+  width: 6px;
+  height: 8px;
+  border-radius: 0;
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+}
+
 /* channel strips (def.strips): columns of one-cell knobs over a fader */
 .strips { display: flex; flex: 1; min-height: 0; }
 .strip { display: flex; flex-direction: column; width: var(--cell); }
@@ -545,7 +613,7 @@ body.panning, body.panning * { cursor: grabbing !important; }
 .strip .knob.toggle { height: calc(var(--cell) / 2); }
 .knob.toggle .dial { display: none; }
 .knob.toggle span {
-  width: calc(var(--cell) - 4px);
+  width: calc(var(--cell) - 12px);
   text-transform: none; /* a label is shown as written (the mixer's M and S) */
   height: 18px;
   line-height: 16px;
@@ -556,15 +624,18 @@ body.panning, body.panning * { cursor: grabbing !important; }
   color: var(--f-med);
 }
 .knob.toggle:hover span { border-color: var(--f-med); }
-.knob.toggle.on span { background: var(--f-high); border-color: var(--f-high); color: var(--panel-out); }
+.knob.toggle.on span {
+  background: color-mix(in srgb, var(--f-high) 18%, var(--panel-out));
+  border-color: var(--f-high);
+  color: var(--f-high);
+}
 .knob.toggle.learn span { border-color: var(--accent); }
 .knob.toggle.mapped span { border-style: dashed; }
 /* the step a sequencer is on */
 .knob.toggle.current span { border-color: var(--f-high); box-shadow: 0 0 0 1px var(--f-high); }
 /* a linked key is written inside the button, after the label */
 .knob.toggle[data-key] span { text-align: left; padding-left: 3px; }
-.knob.toggle[data-key]::before { top: calc(50% - 5px); right: 5px; padding: 0; border: 0; color: inherit; z-index: 1; }
-.knob.toggle.on[data-key]::before { color: var(--panel-out); }
+.knob.toggle[data-key]::before { top: calc(50% - 5px); right: 9px; padding: 0; border: 0; color: inherit; z-index: 1; }
 
 /* the step a sequencer is on */
 .knob.current .dial { border-color: var(--f-high); box-shadow: 0 0 0 1px var(--f-high); }

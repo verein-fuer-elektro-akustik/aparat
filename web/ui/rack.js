@@ -59,6 +59,17 @@ function tracker() {
   };
 }
 
+// knob limits from a patch, only for parameters the module has and only
+// well formed ones ([lo, hi], 0 <= lo <= hi <= 1)
+function cleanRanges(keys, ranges) {
+  const out = {};
+  for (const k of keys) {
+    const r = ranges?.[k];
+    if (Array.isArray(r) && r.length === 2 && r[0] >= 0 && r[0] <= r[1] && r[1] <= 1) out[k] = [r[0], r[1]];
+  }
+  return out;
+}
+
 function div(className, parent) {
   const el = document.createElement('div');
   el.className = className;
@@ -196,7 +207,7 @@ export class Rack {
 
   // patch editing
 
-  add(type, { id, x, row, params, data, color } = {}) {
+  add(type, { id, x, row, params, data, color, ranges } = {}) {
     const def = this.defOf(type);
     if (!def) return null;
     const keys = Object.keys(def.params);
@@ -211,6 +222,7 @@ export class Rack {
       keys,
       values,
       data: data ?? null, // what a note or a file module keeps: {text} or {name}
+      ranges: cleanRanges(keys, ranges), // {param: [lo, hi]}, limited knobs (knob.js)
       knobs: [],
       jacks: { in: [], out: [] },
     };
@@ -315,8 +327,16 @@ export class Rack {
     if (!this.live(m)) return;
     m.knobs.forEach((k, i) => {
       const d = m.def.params[m.keys[i]];
-      if (m.keys[i] !== 'bypass' && !d.momentary) k.setNorm(Math.random());
+      if (m.keys[i] !== 'bypass' && !d.momentary) k.randomize();
     });
+  }
+
+  // the limits of m's knobs from a patch ({param: [lo, hi]} or none)
+  setRanges(m, ranges) {
+    const next = cleanRanges(m.keys, ranges);
+    if (JSON.stringify(next) === JSON.stringify(m.ranges)) return;
+    m.ranges = next;
+    m.keys.forEach((k, i) => m.knobs[i].setRange(next[k]));
   }
 
   resetParams(m) {
@@ -329,7 +349,10 @@ export class Rack {
     if (!this.live(m) || m.def.boundary) return null;
     const params = Object.fromEntries(m.keys.map((k, i) => [k, m.values[i]]));
     const copy = this.insert(m.type, { x: m.x + m.def.cols, row: m.row }, params, m.data && { ...m.data });
-    if (copy) this.paintColour(copy, m.color);
+    if (copy) {
+      this.paintColour(copy, m.color);
+      this.setRanges(copy, m.ranges);
+    }
     this.select(copy);
     return copy;
   }
@@ -377,7 +400,7 @@ export class Rack {
     const made = new Map();
     for (const p of list) {
       const spot = { x: (p.x ?? 0) - left, row: (p.row ?? 0) - top + below };
-      made.set(p.id, this.add(p.type, { ...spot, params: p.params, data: p.data && { ...p.data }, color: p.color }));
+      made.set(p.id, this.add(p.type, { ...spot, params: p.params, data: p.data && { ...p.data }, color: p.color, ranges: p.ranges }));
     }
     this.unoverlap();
     for (const c of data.cables ?? []) {
@@ -665,6 +688,7 @@ export class Rack {
         params: Object.fromEntries(m.keys.map((k, i) => [k, m.values[i]])),
         ...(m.data ? { data: m.data } : {}),
         ...(m.color ? { color: m.color } : {}),
+        ...(Object.keys(m.ranges).length ? { ranges: { ...m.ranges } } : {}),
       })),
       cables: this.cables.list.map((c) => ({
         from: [c.from.m.id, c.from.m.def.outputs[c.from.i]],
@@ -746,6 +770,7 @@ export class Rack {
         if (m.textArea) m.textArea.value = m.data?.text ?? '';
         this.sendFile(m);
       }
+      this.setRanges(m, p.ranges);
       m.keys.forEach((k, i) => {
         const v = p.params?.[k] ?? m.def.params[k].default;
         if (v === m.values[i]) return;
@@ -1007,6 +1032,12 @@ export class Rack {
             this.onChange();
           },
           onLearn: () => this.armLearn(m, i),
+          range: m.ranges[key],
+          onRange: (r) => {
+            if (r) m.ranges[key] = r;
+            else delete m.ranges[key];
+            this.onChange();
+          },
         });
         // the pad's own parameters are set from its surface, not shown
         if (!def.pad?.includes(key) && !def.strips) knobs.append(knob.el);
