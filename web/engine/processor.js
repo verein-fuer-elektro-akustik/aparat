@@ -47,7 +47,7 @@ class Aparat extends AudioWorkletProcessor {
     this.lightMods = []; // modules whose outputs light up (def.lights)
     this.gamepads = null; // the last state of the controllers, for new modules
     this.cameraMods = [];
-    this.portalMods = []; // modules that talk to the page each block (outbox, onPortal)
+    this.portalMods = []; // modules that talk to the page each block (outbox, and onPortal or not)
     this.displayMods = [];
 
     this.from = new Int32Array(MAX_CABLES);
@@ -124,7 +124,7 @@ class Aparat extends AudioWorkletProcessor {
         for (const mod of this.midiMods) mod.def.onMidi(mod.state, m.bytes, mod.param);
         break;
       case 'portal':
-        for (const mod of this.portalMods) mod.def.onPortal(mod.state, m, mod.param, mod.id);
+        for (const mod of this.portalMods) mod.def.onPortal?.(mod.state, m, mod.param, mod.id);
         break;
       case 'camera':
         for (const mod of this.cameraMods) mod.def.onCamera(mod.state, m.values, mod.param);

@@ -174,6 +174,12 @@ label.menu-row { justify-content: space-between; gap: 1rem; }
   border: 1px solid var(--f-low);
   box-shadow: 0 8px 32px var(--shadow);
 }
+/* the add-module and right-click menus fade in and out; display waits for
+   the fade before a menu goes */
+#menu, #ctx { transition: opacity 90ms ease-out, display 90ms allow-discrete; }
+#menu[hidden], #ctx[hidden] { opacity: 0; pointer-events: none; }
+@starting-style { #menu, #ctx { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #menu, #ctx { transition: none; } }
 /* the make-composite and composite panel dialogs */
 #panelEdit,
 #compose {
