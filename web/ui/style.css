@@ -380,12 +380,22 @@ body.panning, body.panning * { cursor: grabbing !important; }
   border: 1px solid var(--edge);
   pointer-events: none;
 }
-.module.selected::after { border-color: var(--accent); }
+.module.selected::after { border-color: var(--f-high); }
+/* A module's panel colours: its own (the theme's, or tinted, see below),
+   lifted a little towards the foreground while it is selected. */
+.module {
+  --panel-own: var(--panel-0);
+  --panel-out-own: var(--panel-out-0);
+  --lift: 0%;
+  --panel: color-mix(in srgb, var(--f-high-0) var(--lift), var(--panel-own));
+  --panel-out: color-mix(in srgb, var(--f-high-0) var(--lift), var(--panel-out-own));
+}
+.module.selected { --lift: 6%; }
 /* a module with a colour of its own: the panel takes on some of it, its
    edge and title more */
 .module.coloured {
-  --panel: color-mix(in srgb, var(--tone) 22%, var(--panel-0));
-  --panel-out: color-mix(in srgb, var(--tone) 14%, var(--panel-out-0));
+  --panel-own: color-mix(in srgb, var(--tone) 22%, var(--panel-0));
+  --panel-out-own: color-mix(in srgb, var(--tone) 14%, var(--panel-out-0));
   --edge: color-mix(in srgb, var(--tone) 45%, var(--edge-0));
 }
 .module.coloured .title { color: color-mix(in srgb, var(--tone) 55%, var(--f-high-0)); }
@@ -509,18 +519,53 @@ body.panning, body.panning * { cursor: grabbing !important; }
 .knob.learn .dial { border-color: var(--accent); }
 .knob.mapped .dial { border-style: dashed; }
 
-/* on/off parameters: a square button with a lamp that lights when on */
-.knob.toggle { cursor: pointer; }
-.knob.toggle .dial { width: 22px; height: 22px; margin: 3px 0; border-radius: 3px; }
-.knob.toggle .dial::after {
-  left: 6px;
-  top: 6px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--edge);
+/* a vertical fader: a track with a cap, taking the height its strip leaves */
+.knob.fader { flex: 1; height: auto; min-height: 0; justify-content: flex-start; padding-top: 8px; }
+.knob.fader .dial { flex: 1; width: 6px; height: auto; border-radius: 3px; }
+.knob.fader .dial::after {
+  left: 50%;
+  top: auto;
+  bottom: calc(var(--pos, 0) * (100% - 10px));
+  width: 26px;
+  height: 10px; /* FADER_CAP in knob.js */
+  box-sizing: border-box;
+  transform: translateX(-50%);
+  border: 1px solid var(--f-med);
+  border-radius: 2px;
+  background: linear-gradient(var(--f-high), var(--f-high)) center / 100% 2px no-repeat, var(--panel-out);
 }
-.knob.toggle.on .dial::after { background: var(--f-high); }
+.knob.fader:hover .dial::after { border-color: var(--f-high); }
+/* channel strips (def.strips): columns of one-cell knobs over a fader */
+.strips { display: flex; flex: 1; min-height: 0; }
+.strip { display: flex; flex-direction: column; width: var(--cell); }
+.strip .gap { flex: none; height: calc(var(--cell) / 2); }
+/* on/off parameters: a button with its name (or def.label) written on it,
+   filled while on. In a strip it takes half a cell. */
+.knob.toggle { cursor: pointer; }
+.strip .knob.toggle { height: calc(var(--cell) / 2); }
+.knob.toggle .dial { display: none; }
+.knob.toggle span {
+  width: calc(var(--cell) - 4px);
+  text-transform: none; /* a label is shown as written (the mixer's M and S) */
+  height: 18px;
+  line-height: 16px;
+  box-sizing: border-box;
+  border: 1px solid var(--f-low);
+  border-radius: 3px;
+  background: var(--panel-out);
+  color: var(--f-med);
+}
+.knob.toggle:hover span { border-color: var(--f-med); }
+.knob.toggle.on span { background: var(--f-high); border-color: var(--f-high); color: var(--panel-out); }
+.knob.toggle.learn span { border-color: var(--accent); }
+.knob.toggle.mapped span { border-style: dashed; }
+/* the step a sequencer is on */
+.knob.toggle.current span { border-color: var(--f-high); box-shadow: 0 0 0 1px var(--f-high); }
+/* a linked key is written inside the button, after the label */
+.knob.toggle[data-key] span { text-align: left; padding-left: 3px; }
+.knob.toggle[data-key]::before { top: calc(50% - 5px); right: 5px; padding: 0; border: 0; color: inherit; z-index: 1; }
+.knob.toggle.on[data-key]::before { color: var(--panel-out); }
+
 /* the step a sequencer is on */
 .knob.current .dial { border-color: var(--f-high); box-shadow: 0 0 0 1px var(--f-high); }
 

@@ -1,5 +1,6 @@
 const DRAG_RANGE = 180;
 const SWEEP = 270;
+const FADER_CAP = 10; // px, the height of a fader's cap (style.css)
 
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
 
@@ -20,12 +21,16 @@ export function formatValue(def, v) {
 
 // A parameter that is only off (0) or on (1) is drawn as a button that flips
 // on click. It keeps the knob interface, so random, reset and midi learn work.
+// One with fader: true is a vertical fader, which works like a knob except
+// that a drag moves its cap with the pointer. A toggle has its name (or
+// def.label) written on it and is filled while on, so it shows no value.
 const isToggle = (def) => def.min === 0 && def.max === 1 && def.step === 1;
 
 export function makeKnob({ name, def, value, onChange, onLearn }) {
   const toggle = isToggle(def);
   const el = document.createElement('div');
-  el.className = toggle ? 'knob toggle' : 'knob';
+  const text = toggle && (def.label ?? name);
+  el.className = toggle ? 'knob toggle' : def.fader ? 'knob fader' : 'knob';
   el.tabIndex = 0;
   el.setAttribute('aria-label', name);
   if (toggle) {
@@ -38,7 +43,7 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
   const dial = document.createElement('div');
   dial.className = 'dial';
   const label = document.createElement('span');
-  label.textContent = name;
+  label.textContent = toggle ? text : name;
   el.append(dial, label);
 
   let current = value;
@@ -47,12 +52,13 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
 
   function render() {
     if (toggle) {
-      el.classList.toggle('on', current === 1);
-      el.setAttribute('aria-checked', String(current === 1));
-      if (showing) label.textContent = formatValue(def, current);
+      const lit = def.inverted ? current === 0 : current === 1;
+      el.classList.toggle('on', lit);
+      el.setAttribute('aria-checked', String(lit));
       return;
     }
-    dial.style.transform = `rotate(${norm * SWEEP - SWEEP / 2}deg)`;
+    if (def.fader) dial.style.setProperty('--pos', norm.toFixed(4));
+    else dial.style.transform = `rotate(${norm * SWEEP - SWEEP / 2}deg)`;
     el.setAttribute('aria-valuenow', norm.toFixed(3));
     el.setAttribute('aria-valuetext', formatValue(def, current));
     if (showing) label.textContent = formatValue(def, current);
@@ -61,7 +67,7 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
   function show(on) {
     showing = on;
     el.classList.toggle('active', on);
-    label.textContent = on ? formatValue(def, current) : name;
+    if (!toggle) label.textContent = on ? formatValue(def, current) : name;
   }
 
   function setNorm(n) {
@@ -112,9 +118,15 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
     el.setPointerCapture(e.pointerId);
     dragging = true;
     let lastY = e.clientY;
+    // a fader's cap follows the pointer along its track (on screen, so zoomed)
+    let range = DRAG_RANGE;
+    if (def.fader) {
+      const shown = dial.getBoundingClientRect().height;
+      range = Math.max(1, shown - FADER_CAP * (shown / dial.offsetHeight || 1));
+    }
     const move = (ev) => {
       const scale = ev.shiftKey ? 0.1 : 1;
-      setNorm(norm + ((lastY - ev.clientY) / DRAG_RANGE) * scale);
+      setNorm(norm + ((lastY - ev.clientY) / range) * scale);
       lastY = ev.clientY;
     };
     const up = () => {
@@ -188,6 +200,8 @@ export function makeKnob({ name, def, value, onChange, onLearn }) {
     el,
     setValue,
     setNorm,
+    // from a midi controller: an inverted button is lit at the top
+    setControl: (n) => setNorm(def.inverted ? 1 - n : n),
     reset: () => setNorm(toNorm(def, def.default)),
   };
 }

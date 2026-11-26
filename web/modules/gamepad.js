@@ -75,7 +75,7 @@ export default {
   outputs: OUTPUTS,
   kinds: { out: { a: 'gate', b: 'gate', x: 'gate', y: 'gate', lb: 'gate', rb: 'gate', up: 'gate', down: 'gate', left: 'gate', right: 'gate' } },
   lights: OUTPUTS,
-  params: Object.fromEntries([1, 2, 3, 4].map((n) => [String(n), { min: 0, max: 1, default: n === 1 ? 1 : 0, step: 1, format: (v) => (v ? `pad ${n} on` : `pad ${n} off`) }])),
+  params: Object.fromEntries([1, 2, 3, 4].map((n) => [String(n), { min: 0, max: 1, default: n === 1 ? 1 : 0, step: 1, label: `pad ${n}`, format: (v) => (v ? `pad ${n} on` : `pad ${n} off`) }])),
   displayHeight: 64,
   create: (sr) => ({
     pads: null,

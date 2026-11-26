@@ -62,9 +62,17 @@ import portal from './portal.js';
 //   inputs               {name: value while unpatched}
 //   outputs              [names]
 //   params               {name: {min, max, default, step?, curve?, format?}};
-//                        min 0, max 1, step 1 shows as an on/off button;
+//                        min 0, max 1, step 1 shows as an on/off button
+//                        with the name (or label: 'text') written on it;
 //                        with momentary: true it is on only while held, and
-//                        not stored in the patch
+//                        not stored in the patch; with inverted: true it
+//                        is lit while 0 (and a midi controller's top turns
+//                        it to 0). With fader: true it is a
+//                        vertical fader, not a knob
+//   strips               optional, [[param names or null]]: the knobs as
+//                        columns, top to bottom, buttons half a cell high;
+//                        a null leaves the room of a button and a fader
+//                        takes the rest of the height (see modules/mixer.js)
 //   create(sr, host)     the state; host has in (sound card), out, midi()
 //   process(s, in, out, p)  one sample; in, out and p are arrays in the
 //                        order of inputs, outputs and params
@@ -135,8 +143,9 @@ export const defs = groups.flatMap(([, list]) => list);
 
 // A module with a `bypass` map ({output: input}) gets an on/off bypass
 // parameter. While it is on, the engine copies those inputs straight to the
-// outputs and does not run the module (see processor.js).
-const BYPASS = { min: 0, max: 1, default: 0, step: 1, format: (v) => (v ? 'on' : 'off') };
+// outputs and does not run the module (see processor.js). Its button says
+// "on" and is lit while the module runs, that is while bypass is 0.
+const BYPASS = { min: 0, max: 1, default: 0, step: 1, label: 'on', inverted: true, format: (v) => (v ? 'off' : 'on') };
 for (const d of defs) if (d.bypass) d.params = { ...d.params, bypass: BYPASS };
 
 export const registry = Object.fromEntries(defs.map((d) => [d.name, d]));

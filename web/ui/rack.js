@@ -896,7 +896,7 @@ export class Rack {
       this.onChange();
     }
     for (const e of this.midiMap) {
-      if (e.channel === channel && e.cc === cc) this.knobFor(e)?.setNorm(value / 127);
+      if (e.channel === channel && e.cc === cc) this.knobFor(e)?.setControl(value / 127);
     }
   }
 
@@ -991,7 +991,7 @@ export class Rack {
     }
 
     if (m.keys.length) {
-      const knobs = div('knobs', el);
+      const knobs = div(def.strips ? 'strips' : 'knobs', el);
       const list = Object.values(def.params);
       m.keys.forEach((key, i) => {
         const knob = makeKnob({
@@ -1009,9 +1009,17 @@ export class Rack {
           onLearn: () => this.armLearn(m, i),
         });
         // the pad's own parameters are set from its surface, not shown
-        if (!def.pad?.includes(key)) knobs.append(knob.el);
+        if (!def.pad?.includes(key) && !def.strips) knobs.append(knob.el);
         m.knobs.push(knob);
       });
+      // channel strips: columns of knobs, top to bottom
+      for (const column of def.strips ?? []) {
+        const strip = div('strip', knobs);
+        for (const key of column) {
+          if (key === null) div('gap', strip);
+          else strip.append(m.knobs[m.keys.indexOf(key)].el);
+        }
+      }
       if (!knobs.children.length) knobs.remove();
     }
     if (def.pad) this.buildPad(m);
