@@ -72,15 +72,15 @@
     <li>Right-click a module for a colour: one of the swatches, any colour with <b>+</b>, or none. It colours all the selected modules and is kept in the patch.</li>
     <li>Click a module to select it, <kbd>shift</kbd>-click to select several, or <kbd>shift</kbd>-drag on empty space to draw a box around them. Several selected modules move together.</li>
     <li>Right-click a module for <b>random</b> (random knob values), <b>reset</b>, <b>duplicate</b>, <b>copy</b>, <b>remove</b> and <b>help</b>, which opens its entry on this page.</li>
-    <li>Some modules have a <b>bypass</b> button: the signal then goes straight through, as if the module were not there.</li>
+    <li>Effects and other modules that shape a signal have an <b>on</b> button, lit while the module runs. Switch it off to bypass the module: the signal then goes straight through, as if the module were not there.</li>
     <li>Drop an audio file on empty rack space for a sampler that plays it, or on a sampler to load it there.</li>
   </ul>
   <h3>knobs and buttons</h3>
   <ul>
-    <li>Drag a knob up or down, or turn the mouse wheel over it; hold <kbd>shift</kbd> for fine steps. The value shows while the pointer is over it.</li>
+    <li>Drag a knob up or down, or turn the mouse wheel over it; hold <kbd>shift</kbd> for fine steps. The value shows while the pointer is over it. Faders (the mixer's) work the same, their cap follows the pointer.</li>
     <li>Double-click a knob to reset it. When a knob has focus, the arrow keys move it.</li>
     <li>Limit a knob or fader to part of its travel: <kbd>ctrl</kbd>+drag it (<kbd>cmd</kbd> on a Mac). On a knob the left half moves the lowest point and the right half the highest; on a fader, above or below the middle of the range. The range shows as an arc or a stretch of the track, and turning, the wheel, random and midi controllers stay inside it (a controller's whole travel spans the range). <kbd>ctrl</kbd>+double-click takes that limit away.</li>
-    <li>Square buttons switch on and off with a click. The button module's button is on only while it is held.</li>
+    <li>Buttons have their name on them and are filled while on; a click switches them. The button module's <b>push</b> is on only while it is held.</li>
     <li>Right-click a knob to link it to a midi controller, see <a href="#midi">midi</a>.</li>
   </ul>
   <h3>cables</h3>
@@ -179,7 +179,7 @@
   <h2>controllers</h2>
   <ul>
     <li><b>pad</b> is a touch surface: drag on it with the mouse, a pen or a finger for x and y. With a pen or a finger, press follows how hard you press. The position is kept with the patch.</li>
-    <li>Key learn: right-click a button or switch (a button module's push, bypass, run…), then press a key. The key then holds the button down while you hold it, or flips the switch each time you press it, and shows on the panel. Right-click twice to remove it, <kbd>esc</kbd> stops learning. Keys with a job of their own (<kbd>delete</kbd>, <kbd>esc</kbd>, the zoom keys) can't be learned; a playing key that is learned plays the button instead of its note. Knobs learn midi controllers only. The links are kept with the patch.</li>
+    <li>Key learn: right-click a button (a button module's push, a clock's run, an effect's on, a mixer's mute or solo…), then press a key. The key then holds the button down while you hold it, or flips the switch each time you press it, and shows on the panel. Right-click twice to remove it, <kbd>esc</kbd> stops learning. Keys with a job of their own (<kbd>delete</kbd>, <kbd>esc</kbd>, the zoom keys) can't be learned; a playing key that is learned plays the button instead of its note. Knobs learn midi controllers only. The links are kept with the patch.</li>
     <li><b>camera</b> turns the camera into voltages: how light the picture is, how much moves and where, and the motion in each of nine zones, so you can play by waving in front of it. The browser asks for the camera the first time. It only runs while audio is on and a camera module is in the patch; the picture stays in your browser, nothing is sent anywhere.</li>
     <li><b>portal</b> is a wireless cable: what goes into a portal comes out of every other portal on the same channel, in this patch or in aparat open in another tab of this browser. Use it to run several patches from one clock. The panel shows how many other portals are linked. It is for gates, clocks and control voltages; changes take a few ms, and each tab's sound card clock drifts a little, so it can't carry audio.</li>
     <li><b>gamepad</b> reads a game controller plugged in or paired with the computer. Browsers only show a controller after one of its buttons was pressed, so press one first. Sticks, triggers, buttons and the d-pad each have a jack; <b>pad</b> picks the controller when there are several.</li>

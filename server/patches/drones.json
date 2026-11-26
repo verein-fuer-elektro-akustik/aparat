@@ -49,7 +49,7 @@
     {
       "id": 5,
       "type": "vcf",
-      "x": 13,
+      "x": 14,
       "row": 0,
       "params": {
         "cutoff": 320,
@@ -61,7 +61,7 @@
     {
       "id": 6,
       "type": "lfo",
-      "x": 16,
+      "x": 17,
       "row": 0,
       "params": {
         "rate": 0.021
@@ -71,7 +71,7 @@
     {
       "id": 7,
       "type": "lfo",
-      "x": 18,
+      "x": 19,
       "row": 0,
       "params": {
         "rate": 0.013
@@ -81,7 +81,7 @@
     {
       "id": 8,
       "type": "atten",
-      "x": 20,
+      "x": 21,
       "row": 0,
       "params": {
         "gain1": 0.35,
@@ -94,7 +94,7 @@
     {
       "id": 9,
       "type": "vca",
-      "x": 22,
+      "x": 23,
       "row": 0,
       "params": {
         "gain": 0.8
@@ -138,7 +138,7 @@
     {
       "id": 13,
       "type": "vcf",
-      "x": 10,
+      "x": 11,
       "row": 1,
       "params": {
         "cutoff": 650,
@@ -150,7 +150,7 @@
     {
       "id": 14,
       "type": "lfo",
-      "x": 13,
+      "x": 14,
       "row": 1,
       "params": {
         "rate": 0.017
@@ -160,7 +160,7 @@
     {
       "id": 15,
       "type": "lfo",
-      "x": 15,
+      "x": 16,
       "row": 1,
       "params": {
         "rate": 0.009
@@ -170,7 +170,7 @@
     {
       "id": 16,
       "type": "vca",
-      "x": 17,
+      "x": 18,
       "row": 1,
       "params": {
         "gain": 1
@@ -288,7 +288,7 @@
     {
       "id": 27,
       "type": "vca",
-      "x": 4,
+      "x": 5,
       "row": 3,
       "params": {
         "gain": 0.9
@@ -298,7 +298,7 @@
     {
       "id": 28,
       "type": "vco",
-      "x": 6,
+      "x": 7,
       "row": 3,
       "params": {
         "tune": 0.75,
@@ -309,7 +309,7 @@
     {
       "id": 29,
       "type": "vco",
-      "x": 9,
+      "x": 10,
       "row": 3,
       "params": {
         "tune": 0.3333
@@ -319,7 +319,7 @@
     {
       "id": 30,
       "type": "lfo",
-      "x": 12,
+      "x": 13,
       "row": 3,
       "params": {
         "rate": 0.006
@@ -329,7 +329,7 @@
     {
       "id": 31,
       "type": "atten",
-      "x": 14,
+      "x": 15,
       "row": 3,
       "params": {
         "gain1": 0.5,
@@ -342,7 +342,7 @@
     {
       "id": 32,
       "type": "vca",
-      "x": 16,
+      "x": 17,
       "row": 3,
       "params": {
         "gain": 1
@@ -431,7 +431,7 @@
     {
       "id": 40,
       "type": "mixer",
-      "x": 4,
+      "x": 5,
       "row": 5,
       "params": {
         "a": 1,
@@ -445,7 +445,7 @@
     {
       "id": 41,
       "type": "delay",
-      "x": 8,
+      "x": 10,
       "row": 5,
       "params": {
         "time": 0.9,
@@ -457,7 +457,7 @@
     {
       "id": 42,
       "type": "reverb",
-      "x": 11,
+      "x": 13,
       "row": 5,
       "params": {
         "size": 0.93,
@@ -469,7 +469,7 @@
     {
       "id": 43,
       "type": "output",
-      "x": 14,
+      "x": 16,
       "row": 5,
       "params": {
         "first": 1,

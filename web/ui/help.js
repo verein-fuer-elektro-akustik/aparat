@@ -18,8 +18,11 @@ const isToggle = (p) => p.min === 0 && p.max === 1 && p.step === 1;
 
 function knob(name, p) {
   let range;
-  if (p.momentary) range = isToggle(p) ? 'push button' : 'played, not kept in the patch';
-  else if (isToggle(p)) range = `on/off, ${p.default ? 'on' : 'off'} at first`;
+  if (p.momentary) range = isToggle(p) ? `button${p.label ? ` "${p.label}"` : ''}, on while held` : 'played, not kept in the patch';
+  else if (isToggle(p) && p.inverted) {
+    // the bypass: its button says "on" and is lit while the module runs
+    range = `button "${p.label}", lit at first; switched off, the module is bypassed`;
+  } else if (isToggle(p)) range = `button${p.label ? ` "${p.label}"` : ''}, ${p.default ? 'lit' : 'not lit'} at first`;
   else range = `${formatValue(p, p.min)} to ${formatValue(p, p.max)}, ${formatValue(p, p.default)} at first`;
   return build('li', {}, [build('b', { textContent: name }, []), ` ${range}`]);
 }

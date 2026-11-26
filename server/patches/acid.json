@@ -346,7 +346,7 @@
     {
       "id": 26,
       "type": "mixer",
-      "x": 4,
+      "x": 5,
       "row": 3,
       "params": {
         "a": 1,
@@ -360,7 +360,7 @@
     {
       "id": 27,
       "type": "drive",
-      "x": 8,
+      "x": 10,
       "row": 3,
       "params": {
         "drive": 1.2,
@@ -373,7 +373,7 @@
     {
       "id": 28,
       "type": "scope",
-      "x": 10,
+      "x": 12,
       "row": 3,
       "params": {
         "time": 0.35
@@ -383,7 +383,7 @@
     {
       "id": 29,
       "type": "output",
-      "x": 14,
+      "x": 16,
       "row": 3,
       "params": {
         "first": 1,
