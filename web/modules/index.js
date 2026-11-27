@@ -97,6 +97,9 @@ import portal from './portal.js';
 //   displayKnob          optional, display() returns the knob to outline
 //   displayText(data)    optional, the lines of text to show for display()'s
 //                        data instead of a trace
+//   displayMeter(data)   optional, with displayText: a level bar below the
+//                        text, {peak, rms, hold, marks} (0 to 1, hold or
+//                        null, marks: [[at, label]])
 //   displayHeight        optional, the display's height in px (110)
 //   shape(p, live, peaks)  optional, what the display shows, worked out in
 //                        the page from the knobs (p) and the last display()
@@ -119,8 +122,8 @@ import portal from './portal.js';
 //   device               optional, 'out' or 'in': the module's inputs go to
 //                        the sound card's outputs, or its outputs come from
 //                        the card's inputs, channel first + n (its first
-//                        knob). The panel shows only the channels the card
-//                        has, and those with a cable
+//                        knob). Jacks of channels the card does not have
+//                        are toned down and take no new cable
 //   rowStart             optional, {in: [names], out: [names]}: jacks that
 //                        begin a new row of their box, to group them
 //   lights               optional, [output names] whose jacks light up with

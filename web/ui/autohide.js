@@ -6,14 +6,13 @@
 // on it, or recording runs (so the record button shows). The view menu
 // switches it off.
 
+import { kept } from './kept.js';
+
 const IDLE = 3000; // ms without the pointer near the header
 const EDGE = 24; // px from the top that bring it back
 
 export function autohide({ header, racks, running, recording }) {
-  let enabled = true;
-  try {
-    enabled = localStorage.getItem('aparat.autohide') !== 'off';
-  } catch {}
+  let enabled = kept.get('autohide') !== 'off';
   let away = false;
   let timer = 0;
   let height = 0;
@@ -82,9 +81,7 @@ export function autohide({ header, racks, running, recording }) {
     },
     set enabled(on) {
       enabled = on;
-      try {
-        localStorage.setItem('aparat.autohide', on ? 'on' : 'off');
-      } catch {}
+      kept.set('autohide', on ? 'on' : 'off');
       this.update();
     },
   };

@@ -3,10 +3,10 @@
 
 // colours follows the theme; the cables are drawn every frame anyway
 import { colours } from './theme.js';
+import { kept } from './kept.js';
 
 const SEGMENTS = 32;
 const BUCKETS = 8;
-const BASE = 0.12;
 const WAVE_K = 0.7;
 const WAVE_SPEED = 7;
 // Hovered cables get colour so they stand out from the grey patch. Several
@@ -61,24 +61,17 @@ const pathOf = (pts) => {
 // SLACK_MAX, 1 as it always was). Every cable keeps a small bow (MIN_SAG), so
 // short ones between neighbours still show. Kept in this browser
 // (aparat.slack), not in the patch; read here, before any cable is laid.
-export const SLACK_MIN = 0.2;
-export const SLACK_MAX = 2;
+const SLACK_MIN = 0.2; // as the slider in index.html
+const SLACK_MAX = 2;
 const MIN_SAG = 24;
 const clampSlack = (k) => Math.min(SLACK_MAX, Math.max(SLACK_MIN, k));
-let slack = 1;
-try {
-  const stored = Number(localStorage.getItem('aparat.slack'));
-  if (stored) slack = clampSlack(stored);
-} catch {}
+let slack = clampSlack(Number(kept.get('slack')) || 1);
 export const getSlack = () => slack;
 // save: false while the slider is dragged, true when let go
 export function setSlack(k, save = true) {
   if (!Number.isFinite(k)) return;
   slack = clampSlack(k);
-  if (!save) return;
-  try {
-    localStorage.setItem('aparat.slack', String(slack));
-  } catch {}
+  if (save) kept.set('slack', slack);
 }
 
 function curve(x0, y0, x1, y1) {
@@ -342,14 +335,9 @@ export class CableLayer {
 
   drawGhost() {
     const { ctx } = this;
-    if (this.ghost) {
-      const g = this.ghost;
-      ctx.beginPath();
-      ctx.moveTo(g[0], g[1]);
-      for (let i = 1; i <= SEGMENTS; i++) ctx.lineTo(g[i * 2], g[i * 2 + 1]);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = colours['f-high'];
-      ctx.stroke();
-    }
+    if (!this.ghost) return;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = colours['f-high'];
+    ctx.stroke(pathOf(this.ghost));
   }
 }

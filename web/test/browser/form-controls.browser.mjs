@@ -14,8 +14,8 @@ export default async ({ ev, go, ok, shot, send, sleep }) => {
     ok(await ev(`getComputedStyle(document.querySelector('#composeKnobs input')).appearance`) === 'none', `${theme}: own checkbox`);
     await shot(`forms-${theme}-check`);
     await ev(`document.getElementById('composeCancel').click(); 0`);
-    // open the settings menu and its theme select, hover the second option
-    await ev(`[...document.querySelectorAll('nav button, header button')].find(b=>b.textContent.trim()==='settings').click(); 0`); await sleep(150);
+    // open the view menu and its theme select, hover the second option
+    await ev(`[...document.querySelectorAll('nav button, header button')].find(b=>b.textContent.trim()==='view').click(); 0`); await sleep(150);
     const r = await ev(`(() => { const s=document.getElementById('theme'); s.focus(); const r=s.getBoundingClientRect(); return [r.left+r.width/2, r.top+r.height/2]; })()`);
     await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: r[0], y: r[1], button: 'left', clickCount: 1 });
     await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: r[0], y: r[1], button: 'left', clickCount: 1 });

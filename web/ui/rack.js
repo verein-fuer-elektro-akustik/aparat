@@ -1,15 +1,7 @@
 import { registry } from '../modules/index.js';
 import { makeKnob } from './knob.js';
-import { colours } from './theme.js';
+import { paintDisplay } from './displays.js';
 import { defFinder, dependents, flatten, usedComposites } from './composite.js';
-
-// a colour from the theme (#rrggbb or rgb()) as [r, g, b]
-function rgb(c) {
-  const hex = /^#([0-9a-f]{6})$/i.exec(c ?? '');
-  if (hex) return [0, 2, 4].map((k) => parseInt(hex[1].slice(k, k + 2), 16));
-  const m = (c ?? '').match(/[\d.]+/g);
-  return m ? m.slice(0, 3).map(Number) : [128, 128, 128];
-}
 
 // what a jack's kind (def.kinds) means, shown on hover
 const KINDS = { gate: 'gate or trigger, 10 V', pitch: 'pitch, 1 V/oct' };
@@ -59,6 +51,25 @@ function tracker() {
   };
 }
 
+// Follow the pointer from a press until it is let go or the press is
+// cancelled: move gets every move, up the event that ended it. Returns a
+// function that stops following before that.
+function follow(move, up) {
+  const stop = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', done);
+    window.removeEventListener('pointercancel', done);
+  };
+  const done = (ev) => {
+    stop();
+    up(ev);
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', done);
+  window.addEventListener('pointercancel', done);
+  return stop;
+}
+
 // knob limits from a patch, only for parameters the module has and only
 // well formed ones ([lo, hi], 0 <= lo <= hi <= 1)
 function cleanRanges(keys, ranges) {
@@ -69,6 +80,10 @@ function cleanRanges(keys, ranges) {
   }
   return out;
 }
+
+// whether an entry of the midi or key map ({id, param, ...}) is knob i of m
+const linkOf = (m, i) => (e) => e.id === m.id && e.param === m.keys[i];
+const notLinkOf = (m, i) => (e) => e.id !== m.id || e.param !== m.keys[i];
 
 function div(className, parent) {
   const el = document.createElement('div');
@@ -834,15 +849,13 @@ export class Rack {
 
   // the knob's midi controller and key, if it has them
   linksOf(m, i) {
-    const mine = (e) => e.id === m.id && e.param === m.keys[i];
-    return { midi: this.midiMap.find(mine), key: this.keyMap.find(mine) };
+    return { midi: this.midiMap.find(linkOf(m, i)), key: this.keyMap.find(linkOf(m, i)) };
   }
 
   forget(m, i) {
     this.cancelLearn();
-    const other = (e) => e.id !== m.id || e.param !== m.keys[i];
-    this.midiMap = this.midiMap.filter(other);
-    this.keyMap = this.keyMap.filter(other);
+    this.midiMap = this.midiMap.filter(notLinkOf(m, i));
+    this.keyMap = this.keyMap.filter(notLinkOf(m, i));
     m.knobs[i].el.classList.remove('mapped');
     this.showKey(m, i);
     this.onChange();
@@ -876,7 +889,7 @@ export class Rack {
   showKey(m, i) {
     const el = m.knobs[i]?.el;
     if (!el) return;
-    const e = this.keyMap.find((k) => k.id === m.id && k.param === m.keys[i]);
+    const e = this.keyMap.find(linkOf(m, i));
     if (e) el.dataset.key = keyName(e.key);
     else delete el.dataset.key;
   }
@@ -889,7 +902,7 @@ export class Rack {
       const { m, i } = this.learning;
       if (!this.canTakeKey(m, i)) return 'knob';
       this.cancelLearn();
-      this.keyMap = this.keyMap.filter((k) => k.id !== m.id || k.param !== m.keys[i]);
+      this.keyMap = this.keyMap.filter(notLinkOf(m, i));
       this.keyMap.push({ id: m.id, param: m.keys[i], key: e.code });
       this.showKey(m, i);
       this.onChange();
@@ -919,9 +932,7 @@ export class Rack {
     const holding = this.held.get(code);
     if (!holding) return false;
     this.held.delete(code);
-    for (const knob of holding) {
-      knob.setNorm(0);
-    }
+    for (const knob of holding) knob.setNorm(0);
     return true;
   }
 
@@ -936,7 +947,7 @@ export class Rack {
       const knob = m.knobs[i];
       knob.el.classList.remove('learn');
       knob.el.classList.add('mapped');
-      this.midiMap = this.midiMap.filter((e) => e.id !== m.id || e.param !== m.keys[i]);
+      this.midiMap = this.midiMap.filter(notLinkOf(m, i));
       this.midiMap.push({ id: m.id, param: m.keys[i], channel, cc });
       this.learning = null;
       this.onChange();
@@ -1416,9 +1427,6 @@ export class Rack {
       this.setPan(start.left + dx, start.top + dy);
     };
     const up = (ev) => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
       document.body.classList.remove('panning');
       if (moved && ev.type === 'pointerup') this.throwView(track.speed(ev));
       // a left click on empty space without dragging deselects
@@ -1426,9 +1434,7 @@ export class Rack {
       this.select(null);
       this.cables.selected = null;
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    follow(move, up);
   }
 
   // Touch: one finger drags the view; with two, their spread zooms around
@@ -1537,14 +1543,9 @@ export class Rack {
       }
     };
     const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
       band.remove();
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    follow(move, up);
   }
 
   // Dragging one module of a selection moves them all, by whole cells, as far
@@ -1580,22 +1581,17 @@ export class Rack {
       if (fits(dx, drow)) put(dx, drow);
     };
     const end = (cancel) => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
+      stop();
       window.removeEventListener('keydown', key);
       this.dragging = false;
       for (const o of group) o.el.classList.remove('dragging');
       if (cancel) put(0, 0);
       if (!cancel) this.onChange();
     };
-    const up = () => end(false);
     const key = (ev) => {
       if (ev.key === 'Escape') end(true);
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    const stop = follow(move, () => end(false));
     window.addEventListener('keydown', key);
   }
 
@@ -1627,9 +1623,7 @@ export class Rack {
       this.drop.style.top = `${m.row * ROW}px`;
     };
     const end = (cancel) => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
+      stop();
       window.removeEventListener('keydown', key);
       this.dragging = false;
       if (cancel) {
@@ -1645,13 +1639,10 @@ export class Rack {
       this.relayoutCables();
       if (!cancel) this.onChange();
     };
-    const up = () => end(false);
     const key = (ev) => {
       if (ev.key === 'Escape') end(true);
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    const stop = follow(move, () => end(false));
     window.addEventListener('keydown', key);
   }
 
@@ -1669,8 +1660,7 @@ export class Rack {
     // input sums its cables).
     let fixed = { dir, ref: { m, i } };
     if (!e.ctrlKey && !e.metaKey) {
-      const end = dir === 'in' ? 'to' : 'from';
-      const existing = this.cables.list.filter((c) => c[end].m === m && c[end].i === i).pop();
+      const existing = this.cablesAt(m, dir, i).pop();
       if (existing) {
         fixed = dir === 'in' ? { dir: 'out', ref: existing.from } : { dir: 'in', ref: existing.to };
         this.disconnect(existing);
@@ -1685,9 +1675,6 @@ export class Rack {
     this.dragging = true;
     const move = (ev) => draw(this.pointer(ev));
     const up = (ev) => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
       this.dragging = false;
       this.cables.setGhost(null);
       if (ev.type === 'pointercancel') return;
@@ -1699,169 +1686,10 @@ export class Rack {
       if (fixed.dir === 'out') this.connect(fixed.ref, ref);
       else this.connect(ref, fixed.ref);
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    follow(move, up);
   }
 
   // displays
-
-  // a line from 0 (bottom) to 1, with vertical marks, horizontal lines and
-  // a dot on it
-  drawCurve(g, w, h, { curve, marks = [], lines = [], dot }, dpr) {
-    const line = Math.max(1, Math.round(dpr));
-    const pad = 4 * dpr; // room for the dot at the top and bottom
-    const y = (v) => h - pad - v * (h - 2 * pad);
-    g.fillStyle = colours.edge;
-    for (const x of marks) g.fillRect(Math.round(x * w), 0, line, h);
-    for (const v of lines) g.fillRect(0, Math.round(y(v)), w, line);
-    g.strokeStyle = colours['f-high'];
-    g.lineWidth = dpr;
-    g.beginPath();
-    for (let i = 0; i < curve.length; i++) {
-      const x = (i / (curve.length - 1)) * w;
-      if (i) g.lineTo(x, y(curve[i]));
-      else g.moveTo(x, y(curve[i]));
-    }
-    g.stroke();
-    if (dot) {
-      g.fillStyle = colours['f-high'];
-      g.beginPath();
-      g.arc(dot[0] * w, y(dot[1]), 3 * dpr, 0, 2 * Math.PI);
-      g.fill();
-    }
-  }
-
-  // A small grey picture ({image: {luma, diff}, mirror}) as big pixels in the
-  // theme's colours, what moves in the brightest, with lines between the
-  // 3×3 zones. Without a picture, why there is none.
-  drawImage(g, w, h, { image, mirror }, dpr) {
-    if (!image) {
-      g.fillStyle = colours['f-med'];
-      g.font = `${10 * dpr}px "JetBrains Mono", monospace`;
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      g.fillText('camera runs with audio', w / 2, h / 2);
-      g.textAlign = 'start';
-      return;
-    }
-    const { luma, diff } = image;
-    const n = luma.length;
-    const pw = image.w ?? 48;
-    const ph = n / pw;
-    // dark stays dark in both themes; what moves is drawn in f-high
-    const lum = (c) => c[0] * 0.3 + c[1] * 0.6 + c[2] * 0.1;
-    const [lo, hi] = [rgb(colours['f-low']), rgb(colours['f-med'])].sort((a, b) => lum(a) - lum(b));
-    const top = rgb(colours['f-high']);
-    const pix = (this.pixels ??= document.createElement('canvas'));
-    pix.width = pw;
-    pix.height = ph;
-    const pg = pix.getContext('2d');
-    const img = pg.createImageData(pw, ph);
-    for (let y = 0; y < ph; y++) {
-      for (let x = 0; x < pw; x++) {
-        const k = y * pw + (mirror ? pw - 1 - x : x);
-        const l = luma[k] / 255;
-        const d = Math.min(1, diff[k] / 64);
-        const o = 4 * (y * pw + x);
-        for (let c = 0; c < 3; c++) {
-          const base = lo[c] + (hi[c] - lo[c]) * l;
-          img.data[o + c] = base + (top[c] - base) * d;
-        }
-        img.data[o + 3] = 255;
-      }
-    }
-    pg.putImageData(img, 0, 0);
-    g.imageSmoothingEnabled = false;
-    g.drawImage(pix, 0, 0, w, h);
-    const line = Math.max(1, Math.round(dpr));
-    g.fillStyle = colours.edge;
-    for (const k of [1 / 3, 2 / 3]) {
-      g.fillRect(Math.round(k * w), 0, line, h);
-      g.fillRect(0, Math.round(k * h), w, line);
-    }
-  }
-
-  // a touch surface: a crosshair through the point, which grows when pressed
-  drawPad(g, w, h, [x, y, press], dpr) {
-    const line = Math.max(1, Math.round(dpr));
-    const inset = 4 * dpr;
-    const px = inset + x * (w - 2 * inset);
-    const py = h - inset - y * (h - 2 * inset);
-    g.fillStyle = colours.edge;
-    for (const k of [0.25, 0.5, 0.75]) {
-      g.fillRect(Math.round(k * w), 0, line, h);
-      g.fillRect(0, Math.round(k * h), w, line);
-    }
-    g.fillStyle = colours['f-med'];
-    g.fillRect(Math.round(px), 0, line, h);
-    g.fillRect(0, Math.round(py), w, line);
-    g.fillStyle = colours['f-high'];
-    g.beginPath();
-    g.arc(px, py, (3 + 5 * press) * dpr, 0, 2 * Math.PI);
-    g.fill();
-  }
-
-  // a waveform from min/max pairs, brighter between from and to, with a
-  // playhead
-  drawWave(g, w, h, { wave, from, to, head }, dpr) {
-    const line = Math.max(1, Math.round(dpr));
-    g.fillStyle = colours.edge;
-    g.fillRect(0, Math.round(h / 2), w, line);
-    if (!wave) return;
-    const n = wave.length / 2;
-    const mid = h / 2;
-    for (let x = 0; x < w; x += line) {
-      // the peaks under this column
-      const a = Math.floor((x / w) * n);
-      const b = Math.max(a + 1, Math.floor(((x + line) / w) * n));
-      let lo = 1;
-      let hi = -1;
-      for (let k = a; k < b && k < n; k++) {
-        lo = Math.min(lo, wave[2 * k]);
-        hi = Math.max(hi, wave[2 * k + 1]);
-      }
-      if (hi < lo) continue;
-      const u = x / w;
-      g.fillStyle = u >= from && u <= to ? colours['f-high'] : colours['f-low'];
-      const top = Math.round(mid - hi * mid * 0.95);
-      g.fillRect(x, top, line, Math.max(line, Math.round(mid - lo * mid * 0.95) - top));
-    }
-    g.fillStyle = colours['f-med'];
-    g.fillRect(Math.round(from * w), 0, line, h);
-    g.fillRect(Math.min(w - line, Math.round(to * w)), 0, line, h);
-    if (head !== null && head !== undefined) {
-      g.fillStyle = colours['f-high'];
-      g.fillRect(Math.round(head * w), 0, 2 * line, h);
-    }
-  }
-
-  // rows of steps, each row stretched over the width: unlit steps small,
-  // lit ones filled, the current one outlined, bright while it fires
-  drawSteps(g, w, h, rows, dpr) {
-    const rh = h / rows.length;
-    const pad = Math.max(1, Math.round(dpr));
-    rows.forEach((row, r) => {
-      const cw = w / row.length;
-      const y = Math.round(r * rh + pad);
-      const ch = Math.round(rh - 2 * pad);
-      for (let k = 0; k < row.length; k++) {
-        const v = row[k];
-        const x = Math.round(k * cw + pad);
-        const cwk = Math.max(1, Math.round((k + 1) * cw - pad) - x);
-        if (v & 4) g.fillStyle = colours['f-high'];
-        else if (v & 1) g.fillStyle = colours['f-low'];
-        else g.fillStyle = colours.edge;
-        if (v & 1 || v & 4) g.fillRect(x, y, cwk, ch);
-        else g.fillRect(x, y + Math.round(ch / 2) - pad, cwk, 2 * pad);
-        if (v & 2) {
-          g.strokeStyle = colours['f-high'];
-          g.lineWidth = pad;
-          g.strokeRect(x + pad / 2, y + pad / 2, cwk - pad, ch - pad);
-        }
-      }
-    });
-  }
 
   redrawDisplays() {
     for (const m of this.modules.values()) if (m.canvas) this.paint(m);
@@ -1873,8 +1701,6 @@ export class Rack {
     for (const m of this.modules.values()) {
       m.live = null;
       if (m.def.shape) this.paint(m);
-    }
-    for (const m of this.modules.values()) {
       if (!m.lightLevel) continue;
       m.lightLevel.fill(0);
       for (const j of m.jacks.out) j?.el.style.removeProperty('--lit');
@@ -1936,54 +1762,6 @@ export class Rack {
     this.toPaint.add(m);
   }
 
-  // lines of text; with a meter ({peak, rms, hold, marks}, 0 to 1), a level
-  // bar below them
-  drawText(m, lines, meter) {
-    const c = m.canvas;
-    const dpr = (devicePixelRatio || 1) * this.zoom;
-    const w = Math.round(c.clientWidth * dpr);
-    const h = Math.round(c.clientHeight * dpr);
-    if (c.width !== w || c.height !== h) {
-      c.width = w;
-      c.height = h;
-    }
-    const g = c.getContext('2d');
-    g.clearRect(0, 0, w, h);
-    g.fillStyle = colours['f-high'];
-    g.font = `${11 * dpr}px "JetBrains Mono", monospace`;
-    g.textBaseline = 'middle';
-    const textH = meter ? h - 30 * dpr : h;
-    lines.forEach((line, i) => g.fillText(line, 8 * dpr, ((i + 0.5) * textH) / lines.length));
-    if (meter) this.drawMeter(g, w, h, meter, dpr);
-  }
-
-  // a level bar at the bottom: rms filled, peak to its right a step lighter,
-  // the held peak as a tick, the scale's marks below
-  drawMeter(g, w, h, { peak, rms, hold, marks }, dpr) {
-    const x0 = 8 * dpr;
-    const bw = w - 16 * dpr;
-    const bh = 8 * dpr;
-    const y = h - 26 * dpr;
-    const line = Math.max(1, Math.round(dpr));
-    g.fillStyle = colours.edge;
-    g.fillRect(x0, y, bw, bh);
-    g.fillStyle = colours['f-med'];
-    g.fillRect(x0, y, Math.round(peak * bw), bh);
-    g.fillStyle = colours['f-high'];
-    g.fillRect(x0, y, Math.round(rms * bw), bh);
-    if (hold !== null) g.fillRect(x0 + Math.round(hold * bw) - line, y - 2 * dpr, 2 * line, bh + 4 * dpr);
-    g.fillStyle = colours['f-med'];
-    g.font = `${8 * dpr}px "JetBrains Mono", monospace`;
-    g.textAlign = 'center';
-    g.textBaseline = 'top';
-    for (const [at, label] of marks) {
-      const x = x0 + Math.round(at * bw);
-      g.fillRect(x, y + bh, line, 3 * dpr);
-      g.fillText(String(label), x, y + bh + 5 * dpr);
-    }
-    g.textAlign = 'start';
-  }
-
   drawDisplay(id, data) {
     const m = this.modules.get(id);
     if (m?.def.displayKnob) {
@@ -2000,73 +1778,12 @@ export class Rack {
   }
 
   // Draws a module's display: its shape() from the knobs and the live data,
-  // or the live data itself.
+  // or the live data itself (displays.js).
   paint(m) {
-    if (!m.canvas || this.modules.get(m.id) !== m) return;
+    if (!m.canvas || !this.live(m)) return;
     const data = m.def.shape ? m.def.shape(m.values, m.live ?? null, m.peaks ?? null) : m.live;
     if (!data) return;
-    const c = m.canvas;
-    if (m.def.displayText) {
-      this.drawText(m, m.def.displayText(data), m.def.displayMeter?.(data));
-      return;
-    }
-    // canvas pixels follow the zoom so the trace stays sharp
-    const dpr = (devicePixelRatio || 1) * this.zoom;
-    const w = Math.round(c.clientWidth * dpr);
-    const h = Math.round(c.clientHeight * dpr);
-    if (c.width !== w || c.height !== h) {
-      c.width = w;
-      c.height = h;
-    }
-    const g = c.getContext('2d');
-    g.clearRect(0, 0, w, h);
-    if (data.steps) {
-      this.drawSteps(g, w, h, data.steps, dpr);
-      return;
-    }
-    if (data.curve) {
-      this.drawCurve(g, w, h, data, dpr);
-      return;
-    }
-    if (data.pad) {
-      this.drawPad(g, w, h, data.pad, dpr);
-      return;
-    }
-    if ('image' in data) {
-      this.drawImage(g, w, h, data, dpr);
-      return;
-    }
-    if ('wave' in data) {
-      this.drawWave(g, w, h, data, dpr);
-      return;
-    }
-    const grid = data.grid ?? { x: [], y: [0.5] };
-    g.fillStyle = colours.edge;
-    const line = Math.max(1, Math.round(dpr));
-    for (const x of grid.x) g.fillRect(Math.round(x * w), 0, line, h);
-    for (const y of grid.y) g.fillRect(0, Math.round((1 - y) * h), w, line);
-    if (data.bars) {
-      const n = data.bars.length;
-      const gap = Math.max(1, Math.round(dpr));
-      g.fillStyle = colours['f-high'];
-      for (let i = 0; i < n; i++) {
-        const x0 = Math.round((i / n) * w);
-        const x1 = Math.round(((i + 1) / n) * w) - gap;
-        const bh = Math.round(Math.min(1, Math.max(0, data.bars[i])) * h);
-        if (bh > 0 && x1 > x0) g.fillRect(x0, h - bh, x1 - x0, bh);
-      }
-      return;
-    }
-    const trace = data.trace ?? data;
-    g.strokeStyle = colours['f-high'];
-    g.lineWidth = dpr;
-    g.beginPath();
-    for (let i = 0; i < trace.length; i++) {
-      const x = (i / (trace.length - 1)) * w;
-      const y = h / 2 - (trace[i] / 12) * (h / 2);
-      if (i) g.lineTo(x, y);
-      else g.moveTo(x, y);
-    }
-    g.stroke();
+    const text = m.def.displayText && { lines: m.def.displayText(data), meter: m.def.displayMeter?.(data) };
+    paintDisplay(m.canvas, data, this.zoom, text);
   }
 }

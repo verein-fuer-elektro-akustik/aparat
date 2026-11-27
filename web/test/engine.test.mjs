@@ -555,7 +555,7 @@ test('lfo pulse width', () => {
 function voicePatch() {
   const ids = newPatch.modules.filter((m) => ['vco', 'vcf', 'env', 'vca'].includes(m.type)).map((m) => m.id);
   const vcf = newPatch.modules.find((m) => m.type === 'vcf').id;
-  return makeComposite(newPatch, ids, 'voice', [{ id: vcf, param: 'cutoff' }], defFinder(registry, {}));
+  return makeComposite(newPatch, ids, 'voice', [{ id: vcf, param: 'cutoff' }]);
 }
 
 test('a composite keeps the patch playing', () => {
@@ -609,7 +609,7 @@ test('key links follow knobs into a composite and back out', () => {
   const vco = newPatch.modules.find((m) => m.type === 'vco').id;
   const start = { ...newPatch, keyMap: [{ id: vcf, param: 'bypass', key: 'KeyQ' }, { id: vco, param: 'tune', key: 'KeyR' }] };
   const ids = newPatch.modules.filter((m) => ['vco', 'vcf', 'env', 'vca'].includes(m.type)).map((m) => m.id);
-  const patch = makeComposite(start, ids, 'voice', [{ id: vcf, param: 'bypass' }], defFinder(registry, {}));
+  const patch = makeComposite(start, ids, 'voice', [{ id: vcf, param: 'bypass' }]);
   const voice = patch.modules.find((m) => m.type === 'voice');
   // the brought-out switch keeps its key, the hidden knob loses its link
   assert.deepEqual(patch.keyMap, [{ id: voice.id, param: 'bypass', key: 'KeyQ' }]);
@@ -622,7 +622,7 @@ test('a composite inside a composite', () => {
   const inner = voicePatch();
   const voice = inner.modules.find((m) => m.type === 'voice').id;
   const midi = inner.modules.find((m) => m.type === 'midi in').id;
-  const outer = makeComposite(inner, [voice, midi], 'synth', [{ id: voice, param: 'cutoff' }], defFinder(registry, inner.composites));
+  const outer = makeComposite(inner, [voice, midi], 'synth', [{ id: voice, param: 'cutoff' }]);
   assert.ok(outer.composites.synth && outer.composites.voice);
   const e = engine(flattenPatch(outer, registry));
   e.midi(0x90, 57, 100);
@@ -673,7 +673,7 @@ test('instance prefixes reach composites inside composites', () => {
   const inner = voicePatch();
   const voice = inner.modules.find((m) => m.type === 'voice').id;
   const midi = inner.modules.find((m) => m.type === 'midi in').id;
-  const outer = makeComposite(inner, [voice, midi], 'synth', [], defFinder(registry, inner.composites));
+  const outer = makeComposite(inner, [voice, midi], 'synth', []);
   const synth = outer.modules.find((m) => m.type === 'synth').id;
   assert.deepEqual(instancePrefixes('voice', outer.modules, outer.composites), [`${synth}/${voice}`]);
   assert.deepEqual(instancePrefixes('synth', outer.modules, outer.composites), [`${synth}`]);

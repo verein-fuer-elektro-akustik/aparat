@@ -20,14 +20,15 @@
 </head>
 <body>
 <header>
-  <h1 id="patchCurrent" title="loaded patch">aparat</h1>
   <nav id="menubar" aria-label="main menu">
+    <!-- the patch menu's title is the loaded patch's name -->
     <div class="menu" data-menu="patch">
-      <button class="menu-title" aria-haspopup="menu" aria-expanded="false">patch</button>
+      <h1><button id="patchCurrent" class="menu-title" aria-haspopup="menu" aria-expanded="false" title="loaded patch">aparat</button></h1>
       <div class="menu-items" role="menu" hidden>
         <button id="new" role="menuitem">new patch</button>
-        <button id="load" role="menuitem" title="open a patch json file">import…</button>
-        <button id="save" role="menuitem" title="download the patch as a json file">export</button>
+        <button id="load" role="menuitem" title="open a patch json file in place of this one">open…</button>
+        <button id="save" role="menuitem" title="download the patch as a json file">save</button>
+        <button id="merge" role="menuitem" title="add the modules and cables of a patch json file to this patch">import…</button>
         <button id="share" role="menuitem" title="copy a link that holds the whole patch, nothing is stored on the server">copy link</button>
         <input id="file" type="file" accept=".json,application/json" hidden>
         <input id="sampleFile" type="file" accept="audio/*" hidden>
@@ -74,6 +75,7 @@
         <hr>
         <label class="menu-row" title="how far cables hang; double-click for the usual">cables <input id="slack" type="range" min="0.2" max="2" step="0.01" value="1" aria-label="cable slack"></label>
         <button id="autohide" role="menuitem" data-keep title="while audio runs, this bar fades away after a few seconds; the pointer at the top edge brings it back"></button>
+        <label class="menu-row">theme <select id="theme" aria-label="theme"><option value="system">system</option><option value="light">light</option><option value="dark">dark</option></select></label>
       </div>
     </div>
     <div class="menu" data-menu="audio">
@@ -95,12 +97,6 @@
           <label class="menu-row">in <select id="midiIn" aria-label="midi input"></select></label>
           <label class="menu-row">out <select id="midiOut" aria-label="midi output"></select></label>
         </div>
-      </div>
-    </div>
-    <div class="menu" data-menu="settings">
-      <button class="menu-title" aria-haspopup="menu" aria-expanded="false">settings</button>
-      <div class="menu-items" role="menu" hidden>
-        <label class="menu-row">theme <select id="theme" aria-label="theme"><option value="system">system</option><option value="light">light</option><option value="dark">dark</option></select></label>
       </div>
     </div>
     <div class="menu" data-menu="help">

@@ -5,7 +5,7 @@
 // something asks for it, so its light is off otherwise.
 
 export const W = 48;
-export const H = 30;
+const H = 30;
 const ZONES = 3;
 
 export class Camera {

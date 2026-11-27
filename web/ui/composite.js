@@ -160,7 +160,7 @@ function unique(name, taken) {
 // inner jacks it fed), cables to outside become outputs (one per inner
 // source). Returns the new patch; the composite takes the place of the
 // leftmost, topmost module.
-export function makeComposite(patch, ids, name, exposed, defOf) {
+export function makeComposite(patch, ids, name, exposed) {
   const inside = new Set(ids);
   const mods = patch.modules.filter((m) => inside.has(m.id));
   const minX = Math.min(...mods.map((m) => m.x));

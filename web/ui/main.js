@@ -17,6 +17,7 @@ import { getTheme, onThemeChange, setTheme } from './theme.js';
 import { boundaryDefs, dependents, insidePatch, instancePrefixes, makeComposite, renamePanel, sameBuild, specFromInside, ungroup } from './composite.js';
 import { download, guarded, showError, showInfo, stamp } from './toast.js';
 import { autohide } from './autohide.js';
+import { kept } from './kept.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -237,23 +238,13 @@ function duplicateSelection() {
   else added(rack.paste(rack.copy()));
 }
 
-// Copied modules go to localStorage, not to the system clipboard: that needs
-// no permission, and pasting works in another patch or tab of aparat.
-function clipboard() {
-  try {
-    return JSON.parse(localStorage.getItem('aparat.clipboard'));
-  } catch {
-    return null;
-  }
-}
+// Copied modules are kept in this browser, not on the system clipboard: that
+// needs no permission, and pasting works in another patch or tab of aparat.
+const clipboard = () => kept.getJson('clipboard');
 
 function copySelection() {
   if (!rack.selection.size) return;
-  try {
-    localStorage.setItem('aparat.clipboard', JSON.stringify(rack.copy()));
-  } catch (err) {
-    showError(`could not copy: ${err.message}`);
-  }
+  if (!kept.setJson('clipboard', rack.copy())) showError('could not copy: this browser keeps nothing for the page');
 }
 
 function pasteClipboard() {
@@ -335,7 +326,7 @@ $('composeOk').addEventListener('click', guarded(() => {
   const exposed = [...$('composeKnobs').querySelectorAll('input:checked')].map((b) => ({ id: Number(b.dataset.id), param: b.dataset.param }));
   closeCompose();
   if (!mods.length) return;
-  const next = makeComposite(rack.toJSON(), mods.map((m) => m.id), name, exposed, rack.defOf);
+  const next = makeComposite(rack.toJSON(), mods.map((m) => m.id), name, exposed);
   const made = next.modules[next.modules.length - 1];
   applyPatch(next, [made.id]);
 }));
@@ -366,6 +357,9 @@ function openNow() {
   for (const name of editing ?? []) for (const n of dependents(name, top.composites)) out.add(n);
   return out;
 }
+
+// the engine id prefixes of every instance of a composite in the patch
+const instancesOf = (name) => instancePrefixes(name, [...top.modules.values()], top.composites);
 
 function openComposite(m) {
   if (!m.def.composite) return;
@@ -423,7 +417,7 @@ function reloadInside(fresh = false) {
   } finally {
     loadingInner = false;
   }
-  shownPrefix = instancePrefixes(name, [...top.modules.values()], top.composites)[0] ?? '';
+  shownPrefix = instancesOf(name)[0] ?? '';
   rack = inner;
   // the edit view opens at the patch's zoom
   if (fresh) inner.setZoom(top.zoom);
@@ -493,7 +487,7 @@ function syncInside() {
     top.onChange();
   } else {
     top.apply({ ...top.toJSON(), composites });
-    shownPrefix = instancePrefixes(name, [...top.modules.values()], top.composites)[0] ?? '';
+    shownPrefix = instancesOf(name)[0] ?? '';
   }
   inner.setComposites(top.composites);
   // the jack panels change: show them anew
@@ -513,7 +507,7 @@ function forwardInner(msg) {
     if (!m || m.def.boundary) return;
     if (spec.params?.some((p) => p.module === msg.id && p.param === m.keys[msg.i])) return;
   }
-  for (const prefix of instancePrefixes(name, [...top.modules.values()], top.composites)) {
+  for (const prefix of instancesOf(name)) {
     audio.send({ op: 'param', id: `${prefix}/${msg.id}`, i: msg.i, v: msg.v });
   }
 }
@@ -747,6 +741,14 @@ function loadPatch(patch) {
   syncCamera();
 }
 
+// A patch in place of the rack's, as it is stored (name: a stored patch's,
+// null for none): shown under that name, with no unsaved changes.
+function openPatch(patch, name = null) {
+  loadPatch(patch);
+  showPatchInUrl(name);
+  markSaved();
+}
+
 // unsaved changes
 //
 // `saved` is the patch as it was loaded or stored. While the rack differs, the
@@ -762,10 +764,7 @@ const canon = (patch) => JSON.stringify({
 });
 let saved = null;
 // the name of the patch whose changes are in the autosave, undefined for none
-let autosaved;
-try {
-  autosaved = JSON.parse(localStorage.getItem('aparat.autosave'))?.name;
-} catch {}
+let autosaved = kept.getJson('autosave')?.name;
 const dirty = () => saved !== null && canon(top.toJSON()) !== saved;
 
 function markSaved() {
@@ -783,16 +782,12 @@ function patchChanged() {
   $('patchCurrent').title = changed ? 'changed since it was loaded or stored' : 'loaded patch';
   if (editing) crumbs();
   document.title = `${name ?? 'untitled'}${changed ? ' *' : ''} · aparat`;
-  try {
-    if (changed) {
-      localStorage.setItem('aparat.autosave', JSON.stringify({ name, patch: currentPatch() }));
-      autosaved = name;
-    } else if (autosaved === name) {
-      // only this patch's: unsaved changes to another patch stay
-      localStorage.removeItem('aparat.autosave');
-      autosaved = undefined;
-    }
-  } catch {}
+  if (changed) {
+    if (kept.setJson('autosave', { name, patch: currentPatch() })) autosaved = name;
+  } else if (autosaved === name) {
+    // only this patch's: unsaved changes to another patch stay
+    if (kept.remove('autosave')) autosaved = undefined;
+  }
 }
 
 window.addEventListener('beforeunload', (e) => {
@@ -827,13 +822,13 @@ $('sampleFile').addEventListener('change', (e) => {
   e.target.value = '';
   if (file && sampleFor) loadSample(sampleFor, file);
 });
-// Dropped files: a patch file (.json) anywhere in the window loads it, an
+
+// Dropped files: a patch file (.json) anywhere in the window opens it, an
 // audio file on empty rack space becomes a sampler there. Other drops are
 // ignored rather than opened by the browser, which would leave the page.
-const isPatchFile = (file) => /\.json$/i.test(file.name) || file.type === 'application/json';
-//
 // While files are dragged over the window, #dropzone says what a drop does.
 // The browser tells the file's type during the drag, not its name.
+const isPatchFile = (file) => /\.json$/i.test(file.name) || file.type === 'application/json';
 const dropzone = $('dropzone');
 let dragDepth = 0; // dragenter and dragleave fire for every element crossed
 function dropHint(e) {
@@ -922,26 +917,30 @@ function onEngineMessage(m) {
   }
 }
 
+// An engine id as the edit view knows it: the part after the shown
+// instance's prefix, a number for its own modules, 'n/m' for those of a
+// composite inside it; null for modules that are not in the shown instance.
+function insideId(id) {
+  if (typeof id !== 'string' || !id.startsWith(`${shownPrefix}/`)) return null;
+  const rest = id.slice(shownPrefix.length + 1);
+  return /^\d+$/.test(rest) ? Number(rest) : rest;
+}
+
 function onFrame(m) {
   cables.setPeaks(m.peaks);
   top.stepLights(m.lights);
   // the edit view lights the jacks of the composite's first instance
   if (editing) {
-    const shown = [];
-    for (const l of m.lights) {
-      const rest = typeof l.id === 'string' && l.id.startsWith(`${shownPrefix}/`) ? l.id.slice(shownPrefix.length + 1) : '';
-      // a composite inside it reads its own ids, 'n/m'
-      if (rest) shown.push({ id: /^\d+$/.test(rest) ? Number(rest) : rest, v: l.v });
-    }
-    inner.stepLights(shown);
+    inner.stepLights(m.lights.flatMap((l) => {
+      const id = insideId(l.id);
+      return id === null ? [] : [{ id, v: l.v }];
+    }));
   }
   for (const d of m.displays) {
     top.drawDisplay(d.id, d.data);
-    // the edit view shows the displays of the composite's first instance
-    if (editing && typeof d.id === 'string' && d.id.startsWith(`${shownPrefix}/`)) {
-      const rest = d.id.slice(shownPrefix.length + 1);
-      if (/^\d+$/.test(rest)) inner.drawDisplay(Number(rest), d.data);
-    }
+    // and shows its displays
+    const id = editing ? insideId(d.id) : null;
+    if (typeof id === 'number') inner.drawDisplay(id, d.data);
   }
   cpu += (m.busy / m.span - cpu) * 0.05;
   $('cpu').textContent = `${Math.round(cpu * 100)}%`;
@@ -1198,20 +1197,12 @@ $('device').addEventListener('change', guarded(async () => {
   if (audio.running) await startAudio();
 }));
 // sample rate and latency are kept in this browser; a change restarts audio
-for (const [id, key] of [['rate', 'aparat.rate'], ['latency', 'aparat.latency']]) {
+for (const id of ['rate', 'latency']) {
   const select = $(id);
-  try {
-    const stored = localStorage.getItem(key);
-    if ([...select.options].some((o) => o.value === stored)) select.value = stored;
-  } catch {
-    // the default then
-  }
+  const stored = kept.get(id);
+  if ([...select.options].some((o) => o.value === stored)) select.value = stored;
   select.addEventListener('change', guarded(async () => {
-    try {
-      localStorage.setItem(key, select.value);
-    } catch {
-      // still used for now
-    }
+    kept.set(id, select.value);
     if (audio.running) await startAudio();
   }));
 }
@@ -1239,18 +1230,13 @@ $('slack').addEventListener('dblclick', () => {
 
 // The sound card's channel counts, for the output and input modules' jacks:
 // the last ones seen are kept, so they are right before audio starts.
-let device = { in: null, out: null };
-try {
-  device = { ...device, ...JSON.parse(localStorage.getItem('aparat.device')) };
-} catch {}
+const device = { in: null, out: null, ...kept.getJson('device') };
 for (const r of [top, inner]) r.setDevice(device);
 audio.onDevice = () => {
   if (audio.channels) device.out = audio.channels;
   if (audio.inputChannels) device.in = audio.inputChannels;
   for (const r of [top, inner]) r.setDevice(device);
-  try {
-    localStorage.setItem('aparat.device', JSON.stringify(device));
-  } catch {}
+  kept.setJson('device', device);
 };
 
 // the header fades away while playing, unless switched off in the view menu
@@ -1270,10 +1256,7 @@ $('autohide').addEventListener('click', () => {
 });
 
 // the computer keyboard plays notes, unless switched off in the midi menu
-let keysOn = true;
-try {
-  keysOn = localStorage.getItem('aparat.keys') !== 'off';
-} catch {}
+let keysOn = kept.get('keys') !== 'off';
 const keys = makeKeys({ send: onMidiMessage, enabled: () => keysOn });
 function showKeys() {
   $('keys').textContent = `computer keyboard: ${keysOn ? 'on' : 'off'}`;
@@ -1283,15 +1266,11 @@ $('keys').addEventListener('click', () => {
   keysOn = !keysOn;
   keys.release();
   showKeys();
-  try {
-    localStorage.setItem('aparat.keys', keysOn ? 'on' : 'off');
-  } catch {}
+  kept.set('keys', keysOn ? 'on' : 'off');
 });
 
 $('new').addEventListener('click', () => {
-  loadPatch(newPatch);
-  showPatchInUrl(null);
-  markSaved();
+  openPatch(newPatch);
 });
 $('share').addEventListener('click', guarded(async () => {
   const url = appRoot.href + (await patchToHash(currentPatch()));
@@ -1308,15 +1287,26 @@ $('share').addEventListener('click', guarded(async () => {
 $('save').addEventListener('click', () => {
   download(new Blob([JSON.stringify(currentPatch(), null, 2)], { type: 'application/json' }), `aparat-${stamp()}.json`);
 });
-$('load').addEventListener('click', () => $('file').click());
+// open: the file's patch in place of this one; import: its modules added to
+// the rack in view (like a paste), the rest of the patch stays
+let fileMode = 'open';
+$('load').addEventListener('click', () => {
+  fileMode = 'open';
+  $('file').click();
+});
+$('merge').addEventListener('click', () => {
+  fileMode = 'import';
+  $('file').click();
+});
 $('file').addEventListener('change', guarded(async (e) => {
   const file = e.target.files[0];
   e.target.value = '';
-  if (file) await importPatch(file);
+  if (!file) return;
+  if (fileMode === 'import') await mergePatch(file);
+  else await importPatch(file);
 }));
 
-// a patch file from the menu or dropped on the window
-async function importPatch(file) {
+async function readPatchFile(file) {
   let patch;
   try {
     patch = JSON.parse(await file.text());
@@ -1324,9 +1314,21 @@ async function importPatch(file) {
     throw new Error(`${file.name} is not a patch file`);
   }
   if (!Array.isArray(patch?.modules) || !Array.isArray(patch?.cables)) throw new Error(`${file.name} is not a patch file`);
-  loadPatch(patch);
-  showPatchInUrl(null);
-  markSaved();
+  return patch;
+}
+
+// a patch file from the menu or dropped on the window
+async function importPatch(file) {
+  openPatch(await readPatchFile(file));
+}
+
+async function mergePatch(file) {
+  const patch = await readPatchFile(file);
+  const mods = rack.paste(patch);
+  if (!mods.length) throw new Error(`${file.name} has no modules that can go here`);
+  added(mods);
+  const left = patch.modules.length - mods.length;
+  showInfo(`${mods.length} module${mods.length === 1 ? '' : 's'} imported from ${file.name}${left ? `, ${left} left out` : ''}`);
 }
 // help: help.html in its own tab, the same one each time, at a section or a
 // module (help.js gives module entries the ids m-<name>)
@@ -1415,9 +1417,7 @@ function disarmDelete() {
 
 const loadNamedPatch = guarded(async () => {
   const name = $('patchName').value.trim();
-  loadPatch(await patches.load(name));
-  showPatchInUrl(name);
-  markSaved();
+  openPatch(await patches.load(name), name);
   flash($('patchLoad'), 'loaded');
 });
 
@@ -1449,9 +1449,7 @@ $('patchDelete').addEventListener('click', guarded(async () => {
   await refreshPatches();
   if (factory) {
     // reverted: show the factory version
-    loadPatch(await patches.load(name));
-    showPatchInUrl(name);
-    markSaved();
+    openPatch(await patches.load(name), name);
     flash(button, 'reverted');
     return;
   }
@@ -1476,15 +1474,13 @@ const zoomStep = (dir) =>
 function zoomTo(z, clientX, clientY) {
   rack.setZoom(z, clientX, clientY);
   zoomShown();
-  try {
-    localStorage.setItem('aparat.zoom', String(rack.zoom));
-  } catch {}
+  kept.set('zoom', rack.zoom);
 }
 
 $('zoomIn').addEventListener('click', () => zoomTo(zoomStep(1)));
 $('zoomOut').addEventListener('click', () => zoomTo(zoomStep(-1)));
 $('zoomReset').addEventListener('click', () => zoomTo(1));
-$('showAll').addEventListener('click', () => showAll());
+$('showAll').addEventListener('click', showAll);
 // a pinch zoomed: the buttons and the remembered zoom follow
 top.onZoom = inner.onZoom = () => zoomTo(rack.zoom);
 function showAll() {
@@ -1562,7 +1558,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if ((e.ctrlKey || e.metaKey) && !e.altKey && e.code === 'KeyS') {
-    // store the patch when it has a name, otherwise export a file
+    // store the patch when it has a name, otherwise save a file
     e.preventDefault();
     if (!$('patches').hidden && !$('patchStore').disabled) $('patchStore').click();
     else $('save').click();
@@ -1678,10 +1674,7 @@ async function loadStored(name) {
   }
 }
 
-let unsaved = null;
-try {
-  unsaved = JSON.parse(localStorage.getItem('aparat.autosave'));
-} catch {}
+const unsaved = kept.getJson('autosave');
 let shared = null;
 try {
   shared = await patchFromHash(location.hash);
@@ -1690,9 +1683,7 @@ try {
 }
 const named = patchFromPath();
 if (shared) {
-  loadPatch(shared);
-  showPatchInUrl(null);
-  markSaved();
+  openPatch(shared);
 } else if (unsaved?.patch && (named === null || named === unsaved.name)) {
   if (unsaved.name) await loadStored(unsaved.name);
   else showPatchInUrl(null);
@@ -1704,11 +1695,7 @@ if (shared) {
   await loadStored(named ?? 'default');
   markSaved();
 }
-let savedZoom = 1;
-try {
-  savedZoom = Number(localStorage.getItem('aparat.zoom')) || 1;
-} catch {}
-zoomTo(savedZoom);
+zoomTo(Number(kept.get('zoom')) || 1);
 top.setPan(0, 0); // from the top left, whatever the zoom
 if (!dirty()) undo.reset();
 else patchChanged();

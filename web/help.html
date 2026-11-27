@@ -29,7 +29,6 @@
     <li><a href="#audio">audio and recording</a></li>
     <li><a href="#midi">midi</a></li>
     <li><a href="#controllers">controllers</a></li>
-    <li><a href="#settings">settings</a></li>
     <li><a href="#modules">modules</a>
       <ol id="toc-modules"></ol>
     </li>
@@ -47,7 +46,7 @@
     <li>Add a module: <b>+ module</b>, or <kbd>shift</kbd>+<kbd>a</kbd> at the pointer. Type to search; the menu describes the module in focus.</li>
     <li>Patch a cable: drag from a jack to another jack. Outputs are the filled jacks at the bottom of a panel, inputs the rings above them.</li>
   </ol>
-  <p>The patch menu holds example patches: <b>berlin</b> plays a sequence by itself, <b>acid</b>, <b>idm</b> and <b>drones</b> show other ways of patching, <b>ms-50</b> is laid out like the Korg MS-50.</p>
+  <p>The patch menu (the patch name at the top left) holds example patches: <b>berlin</b> plays a sequence by itself, <b>acid</b>, <b>idm</b> and <b>drones</b> show other ways of patching, <b>ms-50</b> is laid out like the Korg MS-50.</p>
 </section>
 
 <section id="concepts">
@@ -100,6 +99,7 @@
     <li><kbd>ctrl</kbd>+wheel, a pinch, or <kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd> zoom the rack around the pointer (the buttons in the view menu zoom around the middle).</li>
     <li><kbd>1</kbd>, or show the whole patch in the view menu, zooms and moves the view so the whole patch fits, when you have lost it.</li>
     <li>While audio runs, the bar at the top fades away after a few seconds and the rack takes its space; move the pointer to the top edge to get it back. It stays while recording. The view menu switches this off.</li>
+    <li><b>theme</b> in the view menu: light, dark, or as the system is set (the default). The choice is kept in this browser.</li>
   </ul>
 </section>
 
@@ -121,10 +121,11 @@
 
 <section id="patches">
   <h2>patches</h2>
-  <p>A patch is the modules, their knobs and the cables. The header shows the name of the loaded patch; a <b>*</b> after it means it changed since it was loaded or stored. The patch menu has:</p>
+  <p>A patch is the modules, their knobs and the cables. The patch menu is the first in the header and is named after the loaded patch; a <b>*</b> after the name means it changed since it was loaded or stored. Click the name to open the menu, which has:</p>
   <dl>
     <dt>new patch</dt><dd>a small starting patch: midi in, vco, vcf, envelope, vca, scope and output.</dd>
-    <dt>import… and export</dt><dd>load a patch from a file and save it as one. A patch file dropped anywhere on the window loads it too.</dd>
+    <dt>open… and save</dt><dd>load a patch from a file in place of this one, and save this one as a file. A patch file dropped anywhere on the window opens it too.</dd>
+    <dt>import…</dt><dd>add the modules of a patch file to this patch, with their settings and the cables between them. They land in new rows below the rack, selected, so they can be moved together. Inside a composite they go into the composite.</dd>
     <dt>copy link</dt><dd>copies a link that holds the whole patch. Nothing is stored on the server; whoever opens the link gets the patch.</dd>
     <dt>stored patches</dt><dd>the patches on the server. Type a name and <b>store</b> (or <kbd>ctrl</kbd>+<kbd>s</kbd>); <b>load</b> and <b>delete</b> work on the named patch. A stored patch has its own address, <code>…/aparat/patch/name</code>. The example patches come with aparat: storing over one keeps your version, deleting that brings the original back.</dd>
   </dl>
@@ -187,11 +188,6 @@
     <li><b>portal</b> is a wireless cable: what goes into a portal comes out of every other portal on the same channel, in this patch or in aparat open in another tab of this browser. Use it to run several patches from one clock. The panel shows how many other portals are linked. It is for gates, clocks and control voltages; changes take a few ms, and each tab's sound card clock drifts a little, so it can't carry audio.</li>
     <li><b>gamepad</b> reads a game controller plugged in or paired with the computer. Browsers only show a controller after one of its buttons was pressed, so press one first. Sticks, triggers, buttons and the d-pad each have a jack; <b>pad</b> picks the controller when there are several.</li>
   </ul>
-</section>
-
-<section id="settings">
-  <h2>settings</h2>
-  <p><b>theme</b>: light, dark, or as the system is set (the default). The choice is kept in this browser.</p>
 </section>
 
 <section id="modules">

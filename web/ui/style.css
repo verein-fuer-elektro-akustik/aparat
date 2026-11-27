@@ -24,7 +24,8 @@ header {
   border-bottom: 1px solid var(--edge);
 }
 
-h1 { font-size: inherit; font-weight: 600; color: var(--f-high); max-width: 20rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+h1 { font-size: inherit; font-weight: inherit; margin: 0; }
+#patchCurrent { font-weight: 600; color: var(--f-high); max-width: 20rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .group { display: flex; gap: .25rem; align-items: center; }
 

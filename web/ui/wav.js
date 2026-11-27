@@ -18,9 +18,20 @@ export function encodeWav(blocks, channels, sampleRate) {
   view.setUint16(34, 32, true);
   text(36, 'data');
   view.setUint32(40, bytes, true);
-  let at = 44;
-  for (const block of blocks) {
-    for (let i = 0; i < block.length; i++, at += 4) view.setFloat32(at, block[i], true);
+  // the samples as they are in memory where that is little-endian (about
+  // everywhere), which is much faster for long recordings
+  if (new Uint8Array(new Uint16Array([1]).buffer)[0] === 1) {
+    const out = new Float32Array(view.buffer, 44, samples);
+    let at = 0;
+    for (const block of blocks) {
+      out.set(block, at);
+      at += block.length;
+    }
+  } else {
+    let at = 44;
+    for (const block of blocks) {
+      for (let i = 0; i < block.length; i++, at += 4) view.setFloat32(at, block[i], true);
+    }
   }
   return new Blob([view.buffer], { type: 'audio/wav' });
 }
