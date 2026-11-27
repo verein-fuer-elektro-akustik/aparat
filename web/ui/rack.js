@@ -102,8 +102,9 @@ function peaksOf(samples) {
 }
 
 export class Rack {
-  constructor({ scroller, content, cables, send, onChange, onContextMenu, onOpen, files, onFile }) {
+  constructor({ scroller, content, cables, send, onChange, onContextMenu, onKnobMenu, onOpen, files, onFile }) {
     this.onContextMenu = onContextMenu ?? (() => {});
+    this.onKnobMenu = onKnobMenu; // right-click on a knob: (e, m, i)
     this.onOpen = onOpen ?? (() => {}); // double-click on a module's title
     // audio files of modules like the sampler: files.get(name) is the loaded
     // file or undefined, onFile(m, file) is asked to load one (file: a dropped
@@ -815,23 +816,36 @@ export class Rack {
     return i >= 0 ? m.knobs[i] : null;
   }
 
-  // Right-click arms a knob: the next midi controller, or for buttons and
-  // switches the next key, is linked to it. Right-click again removes its
-  // links.
+  // Learning arms a knob: the next midi controller, or for buttons and
+  // switches the next key, is linked to it. It starts from the knob's menu
+  // (learn) or with shift+right-click (armLearn), where a second one while it
+  // waits takes the knob's links away.
   armLearn(m, i) {
     const same = this.learning?.m === m && this.learning.i === i;
+    if (same) return this.forget(m, i);
+    this.learn(m, i);
+  }
+
+  learn(m, i) {
     this.cancelLearn();
-    if (same) {
-      const other = (e) => e.id !== m.id || e.param !== m.keys[i];
-      this.midiMap = this.midiMap.filter(other);
-      this.keyMap = this.keyMap.filter(other);
-      m.knobs[i].el.classList.remove('mapped');
-      this.showKey(m, i);
-      this.onChange();
-      return;
-    }
     this.learning = { m, i };
     m.knobs[i].el.classList.add('learn');
+  }
+
+  // the knob's midi controller and key, if it has them
+  linksOf(m, i) {
+    const mine = (e) => e.id === m.id && e.param === m.keys[i];
+    return { midi: this.midiMap.find(mine), key: this.keyMap.find(mine) };
+  }
+
+  forget(m, i) {
+    this.cancelLearn();
+    const other = (e) => e.id !== m.id || e.param !== m.keys[i];
+    this.midiMap = this.midiMap.filter(other);
+    this.keyMap = this.keyMap.filter(other);
+    m.knobs[i].el.classList.remove('mapped');
+    this.showKey(m, i);
+    this.onChange();
   }
 
   cancelLearn() {
@@ -1040,6 +1054,10 @@ export class Rack {
             this.onChange();
           },
           onLearn: () => this.armLearn(m, i),
+          onMenu: this.onKnobMenu && ((e) => {
+            if (!this.selection.has(m)) this.select(m);
+            this.onKnobMenu(e, m, i);
+          }),
           range: m.ranges[key],
           onRange: (r) => {
             if (r) m.ranges[key] = r;

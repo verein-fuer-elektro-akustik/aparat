@@ -7,8 +7,9 @@ export default async ({ ev, go, ok, send, shot, sleep }) => {
     const r=m.knobs[m.keys.indexOf('${param}')].el.getBoundingClientRect(); return [r.left+r.width/2, r.top+r.height/2]; })()`);
   const right = async (p) => {
     await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p[0], y: p[1] });
-    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p[0], y: p[1], button: 'right', clickCount: 1 });
-    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p[0], y: p[1], button: 'right', clickCount: 1 });
+    // shift+right-click learns at once (a plain one opens the knob's menu)
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p[0], y: p[1], button: 'right', clickCount: 1, modifiers: 8 });
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p[0], y: p[1], button: 'right', clickCount: 1, modifiers: 8 });
     await sleep(80);
   };
   const down = (key, code) => send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0 });
@@ -17,7 +18,7 @@ export default async ({ ev, go, ok, send, shot, sleep }) => {
   const val = (type, param) => ev(`(() => { const m=[...aparat.rack.modules.values()].find(m=>m.type==='${type}'); const i=m.keys.indexOf('${param}'); return m.def.params['${param}'].momentary ? m.knobs[i].el.classList.contains('on') : m.values[i] === 1; })()`);
   // learn q on the button
   await right(await knobPos('button', 'push'));
-  ok(await ev(`!!aparat.top.learning`), 'right-click arms');
+  ok(await ev(`!!aparat.top.learning`), 'shift+right-click arms');
   await down('q', 'KeyQ'); await up('q', 'KeyQ'); await sleep(50);
   ok(await keyMap() === '[["button","push","KeyQ"]]', `learned: ${await keyMap()}`);
   ok(await ev(`[...aparat.rack.modules.values()].find(m=>m.type==='button').knobs[0].el.dataset.key`) === 'q', 'shows q');

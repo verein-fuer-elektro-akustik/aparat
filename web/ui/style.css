@@ -113,7 +113,7 @@ option:checked { background: var(--f-low); color: var(--background); }
 .menu-items button:hover:not(:disabled), .menu-items button:focus-visible { background: var(--panel-out); color: var(--f-high); outline: none; }
 .menu-items button.current::before { content: "▸ "; }
 .menu-items kbd { font: 10px/1.6 var(--mono); color: var(--f-low); }
-.menu-items hr { border: 0; border-top: 1px solid var(--edge); margin: .25rem 0; }
+.menu-items hr, #ctxItems hr { border: 0; border-top: 1px solid var(--edge); margin: .25rem 0; }
 .menu-row { display: flex; gap: .25rem; align-items: center; padding: .2rem .4rem; }
 label.menu-row { justify-content: space-between; gap: 1rem; }
 .menu-row input, .menu-row select { flex: 1; min-width: 0; }

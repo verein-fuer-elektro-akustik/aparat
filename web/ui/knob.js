@@ -36,7 +36,7 @@ export function formatValue(def, v) {
 // whole travel across the range. onRange gets [lo, hi], or null for none.
 const isToggle = (def) => def.min === 0 && def.max === 1 && def.step === 1;
 
-export function makeKnob({ name, def, value, range, onChange, onLearn, onRange }) {
+export function makeKnob({ name, def, value, range, onChange, onLearn, onRange, onMenu }) {
   const toggle = isToggle(def);
   const el = document.createElement('div');
   const text = toggle && (def.label ?? name);
@@ -280,11 +280,13 @@ export function makeKnob({ name, def, value, range, onChange, onLearn, onRange }
     e.stopPropagation();
   });
 
-  // right-click on a knob is midi learn, not the module menu
+  // right-click opens the knob's menu (onMenu), shift+right-click learns at
+  // once (onLearn)
   el.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    onLearn();
+    if (e.shiftKey || !onMenu) onLearn();
+    else onMenu(e);
   });
 
   render();
@@ -298,6 +300,14 @@ export function makeKnob({ name, def, value, range, onChange, onLearn, onRange }
     setControl: (n) => setNorm(lo + (def.inverted ? 1 - n : n) * (hi - lo)),
     reset: () => setNorm(toNorm(def, def.default)),
     randomize: () => setNorm(lo + Math.random() * (hi - lo)),
+    limited: () => lo > 0 || hi < 1,
+    // takes the limits away, as ctrl+double-click on both ends
+    clearRange: () => {
+      lo = 0;
+      hi = 1;
+      renderRange();
+      onRange?.(null);
+    },
     // from the patch (undo): the value is set on its own
     setRange: (r) => {
       [lo, hi] = r ?? [0, 1];

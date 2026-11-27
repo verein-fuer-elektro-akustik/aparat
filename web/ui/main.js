@@ -57,7 +57,12 @@ const midi = new Midi({
 // view. It works on the selection, which the right-clicked module is part of.
 function moduleMenu(e, m) {
   if (m.def.boundary) return;
-  openContext(e.clientX, e.clientY, rack.selection.size > 1 ? `${rack.selection.size} modules` : m.type, [
+  openContext(e.clientX, e.clientY, rack.selection.size > 1 ? `${rack.selection.size} modules` : m.type, moduleItems(m));
+}
+
+// what the module menu holds, also under a knob's own items
+function moduleItems(m) {
+  return [
     ['random', () => selected().forEach((o) => rack.randomize(o))],
     ['reset', () => selected().forEach((o) => rack.resetParams(o))],
     ['duplicate', duplicateSelection],
@@ -67,7 +72,24 @@ function moduleMenu(e, m) {
     ...(m.def.composite && rack.selection.size <= 1 ? [['edit composite', () => openComposite(m)], ['ungroup composite', () => ungroupModule(m)]] : []),
     ['help', () => openHelp(m.def.composite ? 'composites' : `m-${m.type.replace(/\s+/g, '-')}`)],
     swatches(selected()),
-  ]);
+  ];
+}
+
+// Right-click on a knob or button: learning a controller (or a key, on a
+// button), forgetting it, reset and clearing limits, then the module's menu.
+// shift+right-click learns without the menu.
+function knobMenu(e, m, i) {
+  const knob = m.knobs[i];
+  const def = m.def.params[m.keys[i]];
+  const keys = rack.canTakeKey(m, i);
+  const { midi, key } = rack.linksOf(m, i);
+  const items = [[keys ? 'learn a key or controller' : 'midi learn', () => rack.learn(m, i)]];
+  if (midi) items.push([`forget cc ${midi.cc}`, () => rack.forget(m, i)]);
+  if (key) items.push([`forget key ${keyName(key.key)}`, () => rack.forget(m, i)]);
+  if (!def.momentary) items.push([`reset ${m.keys[i]}`, () => knob.reset()]);
+  if (knob.limited?.()) items.push(['clear limits', () => knob.clearRange()]);
+  const items2 = m.def.boundary ? [] : [document.createElement('hr'), ...moduleItems(m)];
+  openContext(e.clientX, e.clientY, `${m.type} · ${m.keys[i]}`, [...items, ...items2]);
 }
 
 // The patch's rack. `rack` is the one in view: this one, or the edit view's
@@ -84,6 +106,7 @@ const top = new Rack({
   files: samples,
   onFile: (m, file) => (file ? loadSample(m, file) : chooseSample(m)),
   onContextMenu: moduleMenu,
+  onKnobMenu: knobMenu,
   onOpen: (m) => openComposite(m),
 });
 let rack = top;
@@ -98,6 +121,7 @@ const inner = new Rack({
   files: samples,
   onFile: (m, file) => (file ? loadSample(m, file) : chooseSample(m)),
   onContextMenu: moduleMenu,
+  onKnobMenu: knobMenu,
   onOpen: (m) => openComposite(m),
 });
 const recorder = makeRecorder({ audio, button: $('record') });
