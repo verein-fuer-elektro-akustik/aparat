@@ -1118,7 +1118,7 @@ export class Rack {
       jack.addEventListener('pointerdown', (e) => this.startCable(e, m, dir, i));
       jack.addEventListener('pointerenter', () => {
         this.hoverCable = null;
-        this.cables.setHighlight(this.cablesAt(m, dir, i));
+        this.cables.setHighlight(this.cablesAt(m, dir, i), true);
       });
       jack.addEventListener('pointerleave', () => this.cables.setHighlight(null));
     });

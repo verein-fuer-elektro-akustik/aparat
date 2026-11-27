@@ -24,6 +24,10 @@ const CORE_ALPHA = 0.8;
 const CORE = 2.5; // line widths: the cable,
 const OUTLINE = 4.5; // its darker edge,
 const SHADOW = 1.5; // and how far below its shadow falls
+// While a jack is hovered or a cable is being patched, the other cables fade
+// to DIM, easing there at EASE per frame, so the ones that matter stand out.
+const DIM = 0.3;
+const EASE = 0.25;
 const rgbCache = new Map();
 function rgb(hex) {
   if (!rgbCache.has(hex)) rgbCache.set(hex, [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16)));
@@ -81,6 +85,8 @@ export class CableLayer {
     this.fresh = false; // drawn by redraw() since the last frame
     this.plugs = new Map(); // jack element -> the colour its ring has
     this.highlight = new Set();
+    this.focused = false; // the highlight is a jack's: dim the rest
+    this.dim = 1; // the strength of the cables not lit, eased towards DIM or 1
     this.selected = null;
     this.reduced = matchMedia('(prefers-reduced-motion: reduce)');
     new ResizeObserver(() => this.resize()).observe(canvas);
@@ -130,9 +136,11 @@ export class CableLayer {
     if (this.selected === cable) this.selected = null;
   }
 
-  // cables drawn in colour on top, e.g. those on a hovered jack
-  setHighlight(list) {
+  // cables drawn in colour on top, e.g. those on a hovered jack; focus:
+  // the others fade meanwhile
+  setHighlight(list, focus = false) {
     this.highlight = new Set(list ?? []);
+    this.focused = focus && this.highlight.size > 0;
   }
 
   // The cable whose curve passes within tol of (x, y) in rack coordinates.
@@ -198,6 +206,10 @@ export class CableLayer {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     const moving = !this.reduced.matches;
+    const target = this.focused || this.ghost ? DIM : 1;
+    this.dim = moving ? this.dim + (target - this.dim) * EASE : target;
+    if (Math.abs(this.dim - target) < 0.01) this.dim = target;
+    ctx.globalAlpha = this.dim;
 
     // every cable, for the shadow and the edge drawn under all of them
     const all = new Path2D();
@@ -242,6 +254,7 @@ export class CableLayer {
 
     for (const one of coloured) this.drawColoured(one, t, moving);
     this.setPlugs(plugs);
+    ctx.globalAlpha = 1;
 
     // the selected cable stays lit in the accent colour, hovered ones on top
     const shown = [...this.highlight];

@@ -21,9 +21,18 @@ nginx runs in the foreground, ctrl-c stops it.
 ## Tests
 
 ```sh
-(cd server && npm test)   # the patch API
-node --test web/test/     # the audio engine and the modules, without a browser
+(cd server && npm test)          # the patch API
+node --test web/test/            # the audio engine and the modules, without a browser
+node web/test/browser/run.mjs    # the app in headless Chromium (a few minutes)
+node web/test/browser/run.mjs mixer limits   # only the files with these words
 ```
+
+The browser tests need nginx and Chromium or Chrome (`CHROME=/path` picks
+one). They serve `web/` with the same nginx locations as production, run the
+API on an empty patches folder, and start a fresh browser per test; each test
+is a `*.browser.mjs` file in `web/test/browser/`. Screenshots some of them
+take go to a temp folder (`SHOTS=dir` to choose). `./deploy.sh` does not run
+them.
 
 `web/test/index.html` is a page that measures what a browser and sound card
 can do (channels, latency, cpu budget).

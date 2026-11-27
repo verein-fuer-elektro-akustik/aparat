@@ -180,6 +180,13 @@ label.menu-row { justify-content: space-between; gap: 1rem; }
 #menu[hidden], #ctx[hidden] { opacity: 0; pointer-events: none; }
 @starting-style { #menu, #ctx { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { #menu, #ctx { transition: none; } }
+
+/* the header while playing (ui/autohide.js): it fades, then gives its space
+   to the rack */
+header { transition: opacity 200ms ease-out; }
+header.away { opacity: 0; pointer-events: none; }
+header.gone { display: none; }
+@media (prefers-reduced-motion: reduce) { header { transition: none; } }
 /* the make-composite and composite panel dialogs */
 #panelEdit,
 #compose {

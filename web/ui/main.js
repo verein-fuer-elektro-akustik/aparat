@@ -16,6 +16,7 @@ import { patchFromHash, patchToHash } from './share.js';
 import { getTheme, onThemeChange, setTheme } from './theme.js';
 import { boundaryDefs, dependents, insidePatch, instancePrefixes, makeComposite, renamePanel, sameBuild, specFromInside, ungroup } from './composite.js';
 import { download, guarded, showError, showInfo, stamp } from './toast.js';
+import { autohide } from './autohide.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -976,6 +977,7 @@ async function startAudio() {
   setTimeout(showAudioInfo, 1000);
   $('start').textContent = 'stop';
   $('start').classList.add('on');
+  headerBar.update();
   if (usesInput()) await audio.openInput();
 }
 
@@ -995,6 +997,7 @@ async function stopAudio() {
   inner.clearLive();
   $('start').textContent = 'start';
   $('start').classList.remove('on');
+  headerBar.update();
   $('channels').textContent = 'off';
   $('cpu').textContent = '';
   $('clip').replaceChildren();
@@ -1177,6 +1180,22 @@ $('midi').addEventListener('click', guarded(async () => {
   $('midi').hidden = true;
   $('midiPorts').hidden = false;
 }));
+// the header fades away while playing, unless switched off in the view menu
+const headerBar = autohide({
+  header: document.querySelector('header'),
+  racks: [top, inner],
+  running: () => audio.running,
+  recording: () => $('record').classList.contains('on'),
+});
+function showAutohide() {
+  $('autohide').textContent = `hide this bar while playing: ${headerBar.enabled ? 'on' : 'off'}`;
+}
+showAutohide();
+$('autohide').addEventListener('click', () => {
+  headerBar.enabled = !headerBar.enabled;
+  showAutohide();
+});
+
 // the computer keyboard plays notes, unless switched off in the midi menu
 let keysOn = true;
 try {
