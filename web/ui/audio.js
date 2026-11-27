@@ -99,9 +99,20 @@ export class AudioEngine {
   }
 }
 
-export async function listOutputs() {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  stream.getTracks().forEach((t) => t.stop());
+// The sound card outputs. Browsers name them (and give their ids) only once
+// the page may use a microphone, so it asks for one first; without one (none
+// connected, say a usb interface that is unplugged now, or access refused)
+// the outputs are still listed as far as the browser tells: a page that was
+// allowed before gets them all. micError is why it did not get a microphone.
+// ask: false lists without asking (when devices come and go).
+export async function listOutputs({ ask = true } = {}) {
+  let micError = null;
+  try {
+    if (ask) (await navigator.mediaDevices.getUserMedia({ audio: true })).getTracks().forEach((t) => t.stop());
+  } catch (err) {
+    micError = err;
+  }
   const devices = await navigator.mediaDevices.enumerateDevices();
-  return devices.filter((d) => d.kind === 'audiooutput' && d.deviceId !== 'default');
+  const outputs = devices.filter((d) => d.kind === 'audiooutput' && d.deviceId && d.deviceId !== 'default');
+  return { outputs, micError };
 }

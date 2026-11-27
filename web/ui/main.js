@@ -1005,14 +1005,30 @@ async function stopAudio() {
   cpu = 0;
 }
 
-async function showDevices() {
-  const outputs = await listOutputs();
+async function showDevices(ask = true) {
+  const { outputs, micError } = await listOutputs({ ask });
+  if (!outputs.length && micError) {
+    const why = micError.name === 'NotFoundError' ? 'no microphone is connected' : 'microphone access was refused';
+    showInfo(`the browser names sound cards only for pages that may use a microphone, and ${why}: only the system default for now`);
+  }
   const select = $('device');
   const previous = select.value;
   select.replaceChildren(new Option('system default', ''));
   outputs.forEach((d) => select.add(new Option(d.label || d.deviceId, d.deviceId)));
   select.value = outputs.some((d) => d.deviceId === previous) ? previous : '';
+  return select.value === previous;
 }
+
+// A sound card plugged in or out: the list follows, if it was shown. When the
+// chosen one is gone, the system default plays instead.
+navigator.mediaDevices?.addEventListener('devicechange', guarded(async () => {
+  if ($('device').options.length < 2) return;
+  const kept = await showDevices(false);
+  if (!kept && audio.running) {
+    showInfo('the sound card is gone: playing on the system default');
+    await startAudio();
+  }
+}));
 
 // add-module menu, shift+a opens it at the pointer
 
@@ -1153,7 +1169,7 @@ for (const [scroller, content] of [[$('rack'), $('content')], [$('innerRack'), $
 }
 
 $('start').addEventListener('click', guarded(() => (audio.running ? stopAudio() : startAudio())));
-$('devices').addEventListener('click', guarded(showDevices));
+$('devices').addEventListener('click', guarded(() => showDevices()));
 $('device').addEventListener('change', guarded(async () => {
   if (audio.running) await startAudio();
 }));
