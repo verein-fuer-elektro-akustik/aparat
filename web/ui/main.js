@@ -1,6 +1,6 @@
 import { defs } from '../modules/index.js';
 import { AudioEngine, listOutputs } from './audio.js';
-import { CableLayer } from './cables.js';
+import { CableLayer, getSlack, setSlack } from './cables.js';
 import { newPatch } from './new-patch.js';
 import { watchGamepads } from './gamepads.js';
 import { Camera, W as CAMERA_W } from './camera.js';
@@ -1180,6 +1180,23 @@ $('midi').addEventListener('click', guarded(async () => {
   $('midi').hidden = true;
   $('midiPorts').hidden = false;
 }));
+// how far cables hang: a slider in the view menu, the cables follow as it
+// moves; double-click goes back to the usual slack
+function applySlack(k, save) {
+  setSlack(k, save);
+  for (const r of [top, inner]) {
+    r.relayoutCables();
+    r.cables.redraw();
+  }
+}
+$('slack').value = getSlack();
+$('slack').addEventListener('input', (e) => applySlack(Number(e.target.value), false));
+$('slack').addEventListener('change', (e) => applySlack(Number(e.target.value), true));
+$('slack').addEventListener('dblclick', () => {
+  $('slack').value = 1;
+  applySlack(1, true);
+});
+
 // the header fades away while playing, unless switched off in the view menu
 const headerBar = autohide({
   header: document.querySelector('header'),

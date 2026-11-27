@@ -56,10 +56,35 @@ const pathOf = (pts) => {
   return path;
 };
 
+// How far cables hang, from the slider in the view menu: the sag grows with
+// a cable's length up to a limit, both scaled by the slack (SLACK_MIN to
+// SLACK_MAX, 1 as it always was). Every cable keeps a small bow (MIN_SAG), so
+// short ones between neighbours still show. Kept in this browser
+// (aparat.slack), not in the patch; read here, before any cable is laid.
+export const SLACK_MIN = 0.2;
+export const SLACK_MAX = 2;
+const MIN_SAG = 24;
+const clampSlack = (k) => Math.min(SLACK_MAX, Math.max(SLACK_MIN, k));
+let slack = 1;
+try {
+  const stored = Number(localStorage.getItem('aparat.slack'));
+  if (stored) slack = clampSlack(stored);
+} catch {}
+export const getSlack = () => slack;
+// save: false while the slider is dragged, true when let go
+export function setSlack(k, save = true) {
+  if (!Number.isFinite(k)) return;
+  slack = clampSlack(k);
+  if (!save) return;
+  try {
+    localStorage.setItem('aparat.slack', String(slack));
+  } catch {}
+}
+
 function curve(x0, y0, x1, y1) {
   const pts = new Float32Array((SEGMENTS + 1) * 2);
   const dist = Math.hypot(x1 - x0, y1 - y0);
-  const sag = Math.min(140, dist * 0.35 + 24);
+  const sag = MIN_SAG + Math.min(116, dist * 0.35) * slack;
   for (let i = 0; i <= SEGMENTS; i++) {
     const t = i / SEGMENTS;
     const u = 1 - t;
