@@ -3,10 +3,11 @@
 
 export default {
   name: 'output',
-  doc: 'Sound card output: eight channels from first. level is the volume.',
+  doc: 'Sound card output: up to eight channels from first, as many as the sound card has. level is the volume.',
   cols: 4,
   inputs: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0 },
   outputs: [],
+  device: 'out', // shows the jacks of the sound card's channels (rack.js)
   params: {
     first: { min: 1, max: 25, default: 1, step: 1, format: (v) => `${v}-${v + 7}` },
     level: { min: 0, max: 1, default: 0.5 },

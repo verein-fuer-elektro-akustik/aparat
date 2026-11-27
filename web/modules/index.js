@@ -116,6 +116,13 @@ import portal from './portal.js';
 //                        1 V/oct ('pitch'). The panel draws them a little
 //                        differently and names the kind on hover; anything
 //                        still patches into anything
+//   device               optional, 'out' or 'in': the module's inputs go to
+//                        the sound card's outputs, or its outputs come from
+//                        the card's inputs, channel first + n (its first
+//                        knob). The panel shows only the channels the card
+//                        has, and those with a cable
+//   rowStart             optional, {in: [names], out: [names]}: jacks that
+//                        begin a new row of their box, to group them
 //   lights               optional, [output names] whose jacks light up with
 //                        their level (fully at 5 V): gates, triggers and
 //                        controllers, so their events show

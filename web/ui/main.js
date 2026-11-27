@@ -1197,6 +1197,22 @@ $('slack').addEventListener('dblclick', () => {
   applySlack(1, true);
 });
 
+// The sound card's channel counts, for the output and input modules' jacks:
+// the last ones seen are kept, so they are right before audio starts.
+let device = { in: null, out: null };
+try {
+  device = { ...device, ...JSON.parse(localStorage.getItem('aparat.device')) };
+} catch {}
+for (const r of [top, inner]) r.setDevice(device);
+audio.onDevice = () => {
+  if (audio.channels) device.out = audio.channels;
+  if (audio.inputChannels) device.in = audio.inputChannels;
+  for (const r of [top, inner]) r.setDevice(device);
+  try {
+    localStorage.setItem('aparat.device', JSON.stringify(device));
+  } catch {}
+};
+
 // the header fades away while playing, unless switched off in the view menu
 const headerBar = autohide({
   header: document.querySelector('header'),

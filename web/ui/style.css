@@ -556,21 +556,26 @@ body.panning, body.panning * { cursor: grabbing !important; }
 }
 .knob.fader:hover .dial::after { border-color: var(--f-high); }
 /* Limits (knob.js, set with ctrl+drag): the dial with its arc and marks
-   sits in .face. The marks show on hover; a limited knob always shows the
-   range it keeps to, as an arc on the ring or a stretch of the fader's
-   track. */
+   sits in .face. The ring of every knob shows the travel it has: that part
+   of the ring is drawn brighter than the rest, the whole 270 degrees on a
+   knob without limits, the range it keeps to on a limited one. A fader shows
+   its range as a stretch of its track. The marks at the limits show on
+   hover. */
 .face { position: relative; flex: none; display: flex; }
-.arc { display: none; }
-.knob.limited:not(.fader) .arc {
-  display: block;
+.arc {
+  --range: var(--f-med);
   position: absolute;
   inset: 0;
-  border-radius: 50%;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
   pointer-events: none;
-  background: conic-gradient(from -135deg, transparent 0 calc(var(--lo) * 270deg), var(--f-high) 0 calc(var(--hi) * 270deg), transparent 0);
-  -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
-  mask: radial-gradient(closest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  fill: none;
+  stroke: var(--range);
+  stroke-width: 2;
 }
+.knob:hover .arc, .knob.limiting .arc { --range: var(--f-high); }
+.knob.fader .arc { display: none; }
 .knob.fader.limited .dial::before {
   content: "";
   position: absolute;
@@ -621,6 +626,11 @@ body.panning, body.panning * { cursor: grabbing !important; }
   border-radius: 0;
   clip-path: polygon(0 50%, 100% 0, 100% 100%);
 }
+
+/* a channel the sound card does not have (def.device): toned down, takes no
+   new cable */
+.port.off { opacity: .35; }
+.port.off .jack { cursor: not-allowed; }
 
 /* channel strips (def.strips): columns of one-cell knobs over a fader */
 .strips { display: flex; flex: 1; min-height: 0; }

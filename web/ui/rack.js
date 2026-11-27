@@ -126,6 +126,9 @@ export class Rack {
     this.cables = cables;
     this.send = send;
     this.onChange = onChange;
+    // the sound card's channels, {in, out}: a count, or null while unknown
+    // (see showDevicePorts)
+    this.device = { in: null, out: null };
     this.modules = new Map();
     this.nextId = 1;
     this.freeSlots = [];
@@ -285,12 +288,16 @@ export class Rack {
     this.cables.add(cable);
     this.layoutCable(cable);
     this.sendConnect(cable);
+    this.showDevicePorts(from.m);
+    this.showDevicePorts(to.m);
     this.onChange();
     return cable;
   }
 
   disconnect(cable) {
     this.cables.remove(cable);
+    this.showDevicePorts(cable.from.m);
+    this.showDevicePorts(cable.to.m);
     for (const slot of [cable.slot, ...(cable.extra ?? [])]) {
       this.freeSlots.push(slot);
       this.send({ op: 'disconnect', slot });
@@ -1029,6 +1036,7 @@ export class Rack {
             // a push button plays, it does not change the patch
             if (list[i].momentary) return;
             m.values[i] = v;
+            if (key === 'first') this.showDevicePorts(m);
             this.onChange();
           },
           onLearn: () => this.armLearn(m, i),
@@ -1063,6 +1071,35 @@ export class Rack {
     if (!inputs.length) inBox.remove();
     if (!def.outputs.length) outBox.remove();
     if (!inputs.length && def.outputs.length) outBox.style.marginTop = 'auto';
+    this.showDevicePorts(m);
+  }
+
+  // The sound card's channel counts changed (audio started, the input opened).
+  setDevice(device) {
+    Object.assign(this.device, device);
+    for (const m of this.modules.values()) this.showDevicePorts(m);
+  }
+
+  // A module with def.device ('out': its inputs go to the sound card, 'in':
+  // its outputs come from it) names its jacks by channel, counted from its
+  // first knob, and turns off those of channels the card does not have:
+  // toned down, they take no new cable. Cables already there stay (patches
+  // made with more channels keep them) and can still be moved away.
+  showDevicePorts(m) {
+    const side = m?.def.device;
+    if (!side || !m.el) return;
+    const dir = side === 'out' ? 'in' : 'out';
+    const count = this.device[side];
+    const first = m.keys.includes('first') ? m.values[m.keys.indexOf('first')] : 1;
+    m.jacks[dir].forEach((j, i) => {
+      if (!j) return;
+      const ch = first + i;
+      const there = count == null || ch <= count;
+      const port = j.el.parentElement;
+      port.classList.toggle('off', !there);
+      port.title = there ? '' : `channel ${ch}: not on this sound card (${count} ${side === 'out' ? 'outputs' : 'inputs'})`;
+      port.querySelector('span').textContent = String(ch);
+    });
   }
 
   // A touch surface on the display sets the pad's x, y and pressure through
@@ -1101,6 +1138,7 @@ export class Rack {
   buildJacks(m, box, dir, names) {
     names.forEach((name, i) => {
       const port = div('port', box);
+      if (m.def.rowStart?.[dir]?.includes(name)) port.style.gridColumnStart = '1';
       const jack = div('jack', port);
       jack.setAttribute('aria-label', `${m.type} ${dir === 'in' ? 'input' : 'output'} ${name}`);
       const label = document.createElement('span');
@@ -1603,6 +1641,9 @@ export class Rack {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    // a turned off jack (showDevicePorts) only lets its cables be moved away
+    const off = e.currentTarget?.parentElement?.classList.contains('off');
+    if (off && (e.ctrlKey || e.metaKey || !this.cablesAt(m, dir, i).length)) return;
     if (!this.selection.has(m)) this.select(m);
     // Both ends work alike: dragging a jack that has cables picks up the
     // latest one, to move it to another jack or drop it to remove it. Ctrl
@@ -1636,7 +1677,7 @@ export class Rack {
       if (!el?.classList.contains('jack')) return;
       const target = this.modules.get(Number(el.dataset.module));
       const ref = { m: target, i: Number(el.dataset.index) };
-      if (el.dataset.dir === fixed.dir) return;
+      if (el.dataset.dir === fixed.dir || el.parentElement.classList.contains('off')) return;
       if (fixed.dir === 'out') this.connect(fixed.ref, ref);
       else this.connect(ref, fixed.ref);
     };

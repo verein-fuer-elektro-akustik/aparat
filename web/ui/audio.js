@@ -11,7 +11,9 @@ export class AudioEngine {
     this.ctx = null;
     this.node = null;
     this.channels = 0;
+    this.inputChannels = 0; // known once the input is open
     this.mic = null;
+    this.onDevice = () => {}; // the channel counts became known
   }
 
   get running() {
@@ -71,6 +73,7 @@ export class AudioEngine {
     this.ctx = ctx;
     this.node = node;
     this.channels = channels;
+    this.onDevice();
   }
 
   // the delay from the engine to the speakers in ms, as far as the browser
@@ -90,7 +93,9 @@ export class AudioEngine {
     this.mic = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
     });
+    this.inputChannels = this.mic.getAudioTracks()[0]?.getSettings().channelCount || 0;
     this.ctx.createMediaStreamSource(this.mic).connect(this.node);
+    this.onDevice();
   }
 }
 

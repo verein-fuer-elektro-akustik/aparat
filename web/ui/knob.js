@@ -1,6 +1,7 @@
 const DRAG_RANGE = 180;
 const SWEEP = 270;
 const FADER_CAP = 10; // px, the height of a fader's cap (style.css)
+const SVG = 'http://www.w3.org/2000/svg';
 
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
 
@@ -53,7 +54,7 @@ export function makeKnob({ name, def, value, range, onChange, onLearn, onRange }
   dial.className = 'dial';
   const label = document.createElement('span');
   label.textContent = toggle ? text : name;
-  // the dial with what is drawn around it: the limited arc and the handles
+  // the dial with what is drawn around it: the arc of its range and the marks
   const face = document.createElement('div');
   face.className = 'face';
   face.append(dial);
@@ -64,9 +65,19 @@ export function makeKnob({ name, def, value, range, onChange, onLearn, onRange }
   let showing = false;
   let [lo, hi] = range ?? [0, 1];
   const handles = toggle ? null : { lo: makeHandle('lo'), hi: makeHandle('hi') };
+  // the range on the ring, as an svg arc so it stays smooth at any zoom: a
+  // circle over the dial's border, measured in degrees (pathLength 360), whose
+  // dash covers the range; it starts at 3 o'clock, the travel at 135 degrees
+  const arc = handles && document.createElementNS(SVG, 'svg');
+  const ring = handles && document.createElementNS(SVG, 'circle');
+  if (arc) {
+    arc.setAttribute('class', 'arc');
+    arc.setAttribute('viewBox', '0 0 28 28');
+    arc.setAttribute('aria-hidden', 'true');
+    for (const [k, v] of Object.entries({ cx: 14, cy: 14, r: 13, pathLength: 360 })) ring.setAttribute(k, v);
+    arc.append(ring);
+  }
   if (handles) {
-    const arc = document.createElement('div');
-    arc.className = 'arc';
     face.append(arc, handles.lo, handles.hi);
   }
 
@@ -89,6 +100,8 @@ export function makeKnob({ name, def, value, range, onChange, onLearn, onRange }
     el.classList.toggle('limited', lo > 0 || hi < 1);
     el.style.setProperty('--lo', lo);
     el.style.setProperty('--hi', hi);
+    ring.setAttribute('stroke-dasharray', `${((hi - lo) * SWEEP).toFixed(2)} 360`);
+    ring.setAttribute('transform', `rotate(${(135 + lo * SWEEP).toFixed(2)} 14 14)`);
     handles.lo.style.setProperty('--at', lo);
     handles.hi.style.setProperty('--at', hi);
     el.setAttribute('aria-valuemin', String(lo));

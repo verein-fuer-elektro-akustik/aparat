@@ -13,10 +13,10 @@ const WAVE_SPEED = 7;
 // cables on one jack each get their own, starting with the velak accent.
 const HOVER_COLOURS = ['#ed2c3e', '#f5a623', '#3ec7e0', '#7ed957', '#b48cff', '#ff7ab8'];
 
-// A cable takes on a colour: at an end whose module has a colour of its own,
-// that one; else the colour of what it carries (gates, pitch; see def.kinds
-// and --cable-gate, --cable-pitch); else it is grey. A cable with two colours
-// fades from the one at its start to the one at its end. Colours are toned
+// A cable has the colour of where its signal comes from: the colour of its
+// output's module, if that has one; else the colour of what it carries
+// (gates, pitch; see def.kinds and --cable-gate, --cable-pitch); else it is
+// grey. The rings of both its jacks take that colour too. Colours are toned
 // with the theme's cable greys, so they sit with the rest.
 const TONE_BASE = 0.7; // share of the colour in the resting cable
 const TONE_SIGNAL = 0.55; // and in the signal running along it
@@ -215,9 +215,9 @@ export class CableLayer {
     }
   }
 
-  // the colour ([r, g, b]) of a cable's end ('from' or 'to'), or null: grey
-  endColour(c, end) {
-    const hex = c[end].m?.color;
+  // the colour ([r, g, b]) of a cable, or null: grey
+  colourOf(c) {
+    const hex = c.from.m?.color;
     if (hex) return rgb(hex);
     return c.kind ? parse(colours[`cable-${c.kind}`]) : null;
   }
@@ -245,13 +245,13 @@ export class CableLayer {
     for (const c of this.list) {
       const path = pathOf(c.pts);
       all.addPath(path);
-      const from = this.endColour(c, 'from');
-      const to = this.endColour(c, 'to');
-      if (from || to) {
-        const one = { c, path, a: tone(from), b: tone(to) };
+      const colour = this.colourOf(c);
+      if (colour) {
+        const one = { c, path, ...tone(colour) };
         coloured.push(one);
-        if (from) plugs.set(c.from.m.jacks.out[c.from.i]?.el, `rgb(${one.a.base})`);
-        if (to) plugs.set(c.to.m.jacks.in[c.to.i]?.el, `rgb(${one.b.base})`);
+        const ring = `rgb(${one.base})`;
+        plugs.set(c.from.m.jacks.out[c.from.i]?.el, ring);
+        plugs.set(c.to.m.jacks.in[c.to.i]?.el, ring);
         continue;
       }
       grey.addPath(path);
@@ -315,32 +315,24 @@ export class CableLayer {
     }
   }
 
-  // a cable with a colour at one end or both, as a gradient along it
-  drawColoured({ c, path, a, b }, t, moving) {
+  // a cable with a colour
+  drawColoured({ c, path, base, signal }, t, moving) {
     const { ctx } = this;
-    const pts = c.pts;
-    const n = SEGMENTS * 2;
-    const gradient = (from, to, alpha) => {
-      const g = ctx.createLinearGradient(pts[0], pts[1], pts[n], pts[n + 1]);
-      g.addColorStop(0, `rgba(${from}, ${alpha})`);
-      g.addColorStop(1, `rgba(${to}, ${alpha})`);
-      return g;
-    };
     ctx.lineWidth = CORE;
-    ctx.strokeStyle = gradient(a.base, b.base, CORE_ALPHA);
+    ctx.strokeStyle = `rgba(${base}, ${CORE_ALPHA})`;
     ctx.stroke(path);
     const buckets = [];
     this.addSignal(c, t, moving, (k) => (buckets[k] ??= new Path2D()));
     ctx.lineWidth = CORE - 0.5;
     buckets.forEach((p, k) => {
       if (!p) return;
-      ctx.strokeStyle = gradient(a.signal, b.signal, (k + 1) / BUCKETS);
+      ctx.strokeStyle = `rgba(${signal}, ${(k + 1) / BUCKETS})`;
       ctx.stroke(p);
     });
   }
 
-  // A jack with a coloured cable gets its ring in the colour of the cable's
-  // end (style.css, --plug); only changes are written to the page.
+  // A jack with a coloured cable gets its ring in the cable's colour
+  // (style.css, --plug); only changes are written to the page.
   setPlugs(plugs) {
     plugs.delete(undefined);
     for (const [el, colour] of this.plugs) if (plugs.get(el) !== colour) el.style.removeProperty('--plug');

@@ -3,10 +3,11 @@
 
 export default {
   name: 'input',
-  doc: 'Sound card input, four channels from first. Asks for microphone access.',
+  doc: 'Sound card input: up to four channels from first, as many as the sound card has. Asks for microphone access.',
   cols: 2,
   inputs: {},
   outputs: ['1', '2', '3', '4'],
+  device: 'in', // shows the jacks of the sound card's channels (rack.js)
   params: {
     first: { min: 1, max: 5, default: 1, step: 1, format: (v) => `${v}-${v + 3}` },
     gain: { min: 0, max: 4, default: 1 },
